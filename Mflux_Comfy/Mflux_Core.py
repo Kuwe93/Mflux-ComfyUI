@@ -27,41 +27,36 @@ try:
     HAS_FILL = True
 except ImportError:
     HAS_FILL = False
-    print("[Mflux] Flux1Fill nicht verfügbar – Fill/Inpainting deaktiviert")
+    print("[Mflux] Flux1Fill not available")
 
 try:
     from mflux.models.flux.variants.depth.flux_depth import Flux1Depth
     HAS_DEPTH = True
 except ImportError:
     HAS_DEPTH = False
-    print("[Mflux] Flux1Depth nicht verfügbar – Depth Conditioning deaktiviert")
+    print("[Mflux] Flux1Depth not available")
 
 try:
     from mflux.models.flux.variants.redux.flux_redux import Flux1Redux
     HAS_REDUX = True
 except ImportError:
     HAS_REDUX = False
-    print("[Mflux] Flux1Redux nicht verfügbar – Redux deaktiviert")
+    print("[Mflux] Flux1Redux not available")
 
 try:
     from mflux.models.flux.variants.kontext.flux_kontext import Flux1Kontext
     HAS_KONTEXT = True
 except ImportError:
     HAS_KONTEXT = False
-    print("[Mflux] Flux1Kontext nicht verfügbar – Kontext deaktiviert")
+    print("[Mflux] Flux1Kontext not available")
 
 # ── FLUX.2-Familie (zukünftig) ──────────────────────────────────────────────
 try:
-    from mflux.models.flux2.variants.txt2img.flux2 import Flux2
+    from mflux.models.flux2.variants.txt2img.flux2_klein import Flux2Klein
     HAS_FLUX2 = True
 except ImportError:
-    try:
-        # Alternativer Pfad
-        from mflux.models.flux_2.variants.txt2img.flux2 import Flux2
-        HAS_FLUX2 = True
-    except ImportError:
-        HAS_FLUX2 = False
-        print("[Mflux] Flux2 nicht verfügbar – FLUX.2-Modelle werden über Flux1 geladen")
+    HAS_FLUX2 = False
+    print("[Mflux] Flux2Klein not available")
 
 # ── Z-Image-Familie ─────────────────────────────────────────────────────────
 try:
@@ -111,7 +106,7 @@ try:
     HAS_QWEN = True
 except ImportError:
     HAS_QWEN = False
-    print("[Mflux] Qwen nicht verfügbar – Qwen-Nodes deaktiviert")
+    print("[Mflux] Qwen not available")
 
 from .Mflux_Pro import MfluxControlNetPipeline
 
@@ -124,26 +119,9 @@ MODEL_FAMILY_MAP = {
     "dev":            ("flux1", "dev"),
     "krea-dev":       ("flux1", "krea-dev"),
     "kontext-dev":    ("flux1", "kontext-dev"),
+    "flux2-klein-4b": ("flux2", "flux2-klein-4b"), 
+    "flux2-klein-9b": ("flux2", "flux2-klein-9b"),
 }
-
-# FLUX.2 nur hinzufügen wenn verfügbar, sonst über Flux1 mit Alias laden
-if HAS_FLUX2:
-    MODEL_FAMILY_MAP.update({
-        "flux2-klein-4b": ("flux2", "flux2-klein-4b"),
-        "flux2-klein-9b": ("flux2", "flux2-klein-9b"),
-        "flux2-base-4b":  ("flux2", "flux2-base-4b"),
-        "flux2-base-9b":  ("flux2", "flux2-base-9b"),
-        "flux2-dev":      ("flux2", "flux2-dev"),
-    })
-else:
-    # Flux.2 Klein über Flux1 mit Alias – mflux kennt diese Aliases intern
-    MODEL_FAMILY_MAP.update({
-        "flux2-klein-4b": ("flux1", "flux2-klein-4b"),
-        "flux2-klein-9b": ("flux1", "flux2-klein-9b"),
-        "flux2-base-4b":  ("flux1", "flux2-base-4b"),
-        "flux2-base-9b":  ("flux1", "flux2-base-9b"),
-        "flux2-dev":      ("flux1", "flux2-dev"),
-    })
 
 if HAS_ZIMAGE:
     MODEL_FAMILY_MAP.update({
@@ -196,7 +174,6 @@ def get_lora_info(Loras):
 
 
 def resolve_model_alias(model: str, local_path: str) -> tuple[str, str]:
-    """Gibt (familie, alias) zurück."""
     if local_path:
         name_lower = local_path.lower()
         for alias, (family, _) in MODEL_FAMILY_MAP.items():
@@ -216,7 +193,6 @@ def resolve_model_alias(model: str, local_path: str) -> tuple[str, str]:
 
 
 def _tensor_from_image(generated) -> torch.Tensor:
-    """Wandelt ein mflux-Ergebnis in einen ComfyUI (B,H,W,C) Float32-Tensor um."""
     if hasattr(generated, "image"):
         arr = np.array(generated.image).astype(np.float32) / 255.0
     elif isinstance(generated, np.ndarray):
@@ -234,7 +210,6 @@ def _tensor_from_image(generated) -> torch.Tensor:
 
 
 def _save_temp_image(tensor: torch.Tensor) -> str:
-    """Speichert einen ComfyUI-Tensor als temporäre PNG und gibt den Pfad zurück."""
     import tempfile
     arr = (tensor.squeeze(0).cpu().numpy() * 255).clip(0, 255).astype(np.uint8)
     img = Image.fromarray(arr)
@@ -254,8 +229,18 @@ def load_or_create_model(model, quantize, local_path, lora_paths, lora_scales,
     path = local_path if local_path else None
     key = (family, alias, q, path or "", tuple(lora_paths), tuple(lora_scales), variant)
 
+    print(f"[Mflux] --- MODEL ---")
     if key in _model_cache:
+        print(f"[Mflux] Using CACHED model: {family} ({alias})")
         return _model_cache[key]
+    
+    if path:
+        print(f"[Mflux] Loading LOCAL model from path: {path}")
+    else:
+        print(f"[Mflux] Loading INTEGRATED model using alias: {alias}")
+    
+    print(f"[Mflux] Model Family: {family} | Quantization: {quantize}bit | Variant: {variant if variant else 'standard'}")
+    print(f"[Mflux] --- MODEL END ---")
     
     # Basis-Konfiguration
     m_config = ModelConfig.from_name(alias)
@@ -269,16 +254,6 @@ def load_or_create_model(model, quantize, local_path, lora_paths, lora_scales,
         "lora_scales": lora_scales,
     }
 
-    #std_kwargs = dict(
-    #    model_config=ModelConfig.from_name(alias),
-    #    quantize=q,
-    #    local_path=path,
-    #    lora_paths=lora_paths,
-    #    lora_scales=lora_scales,
-    #)
-    #path_kwargs = dict(quantize=q, model_path=path,
-    #                  lora_paths=lora_paths, lora_scales=lora_scales)
-
     if family == "flux1":
         # Flux1 erwartet 'model_path'
         args = {**common_args, "model_path": path}
@@ -286,26 +261,28 @@ def load_or_create_model(model, quantize, local_path, lora_paths, lora_scales,
             inst = Flux1Controlnet(**args)
         elif variant == "fill":
             if not HAS_FILL:
-                raise RuntimeError("Flux1Fill nicht verfügbar in dieser mflux-Version.")
+                raise RuntimeError("Flux1Fill not available.")
             inst = Flux1Fill(quantize=q, model_path=path, lora_paths=lora_paths, lora_scales=lora_scales)
         elif variant == "depth":
             if not HAS_DEPTH:
-                raise RuntimeError("Flux1Depth nicht verfügbar in dieser mflux-Version.")
+                raise RuntimeError("Flux1Depth not available.")
             inst = Flux1Depth(quantize=q, model_path=path, lora_paths=lora_paths, lora_scales=lora_scales)
         elif variant == "redux":
             if not HAS_REDUX:
-                raise RuntimeError("Flux1Redux nicht verfügbar in dieser mflux-Version.")
+                raise RuntimeError("Flux1Redux not available.")
             inst = Flux1Redux(quantize=q, model_path=path, lora_paths=lora_paths, lora_scales=lora_scales)
         elif variant == "kontext":
             if not HAS_KONTEXT:
-                raise RuntimeError("Flux1Kontext nicht verfügbar in dieser mflux-Version.")
+                raise RuntimeError("Flux1Kontext not available.")
             inst = Flux1Kontext(**args)
         else:
             inst = Flux1(**args)
 
     elif family == "flux2":
-        iargs = {**common_args, "model_path": path}
-        inst = Flux2(**args)
+        if not HAS_FLUX2:
+            raise RuntimeError("Flux2Klein not available.")
+        flux2_args = {**common_args, "model_path": path}
+        inst = Flux2Klein(**flux2_args)
 
     elif family == "zimage":
         # ZImage erwartet ebenfalls 'model_path'
@@ -430,7 +407,7 @@ def generate_image(prompt, model, seed, width, height, steps, guidance,
 def generate_fill(prompt, seed, width, height, steps, guidance, quantize,
                   image_path, mask_path, Local_model="", Loras=None):
     if not HAS_FILL:
-        raise RuntimeError("Fill/Inpainting benötigt Flux1Fill, nicht verfügbar in dieser mflux-Version.")
+        raise RuntimeError("Fill/Inpainting needs Flux1Fill, not available in this mflux-version.")
     seed = random.randint(0, 0xFFFFFFFFFFFFFFFF) if seed == -1 else int(seed)
     lora_paths, lora_scales = get_lora_info(Loras)
     inst = load_or_create_model("dev", quantize, Local_model, lora_paths, lora_scales, variant="fill")
@@ -445,7 +422,7 @@ def generate_fill(prompt, seed, width, height, steps, guidance, quantize,
 def generate_depth(prompt, seed, width, height, steps, guidance, quantize,
                    image_path, Local_model="", Loras=None):
     if not HAS_DEPTH:
-        raise RuntimeError("Depth Conditioning benötigt Flux1Depth, nicht verfügbar in dieser mflux-Version.")
+        raise RuntimeError("Depth Conditioning needs Flux1Depth, not available in this mflux-Version.")
     seed = random.randint(0, 0xFFFFFFFFFFFFFFFF) if seed == -1 else int(seed)
     lora_paths, lora_scales = get_lora_info(Loras)
     inst = load_or_create_model("dev", quantize, Local_model, lora_paths, lora_scales, variant="depth")
@@ -460,7 +437,7 @@ def generate_depth(prompt, seed, width, height, steps, guidance, quantize,
 def generate_redux(seed, width, height, steps, guidance, quantize,
                    image_path, Local_model=""):
     if not HAS_REDUX:
-        raise RuntimeError("Redux benötigt Flux1Redux, nicht verfügbar in dieser mflux-Version.")
+        raise RuntimeError("Redux needs Flux1Redux, not available in this mflux-Version.")
     seed = random.randint(0, 0xFFFFFFFFFFFFFFFF) if seed == -1 else int(seed)
     inst = load_or_create_model("dev", quantize, Local_model, [], [], variant="redux")
     generated = inst.generate_image(
@@ -474,7 +451,7 @@ def generate_redux(seed, width, height, steps, guidance, quantize,
 def generate_kontext(prompt, seed, width, height, steps, guidance, quantize,
                      image_path, Local_model="", Loras=None):
     if not HAS_KONTEXT:
-        raise RuntimeError("Kontext benötigt Flux1Kontext, nicht verfügbar in dieser mflux-Version.")
+        raise RuntimeError("Kontext needs Flux1Kontext, not available in this mflux-Version.")
     seed = random.randint(0, 0xFFFFFFFFFFFFFFFF) if seed == -1 else int(seed)
     lora_paths, lora_scales = get_lora_info(Loras)
     inst = load_or_create_model("kontext-dev", quantize, Local_model, lora_paths, lora_scales,
@@ -490,7 +467,7 @@ def generate_kontext(prompt, seed, width, height, steps, guidance, quantize,
 def generate_qwen(prompt, negative_prompt, seed, width, height, steps, guidance,
                   quantize, Local_model="", Loras=None):
     if not HAS_QWEN:
-        raise RuntimeError("Qwen benötigt QwenImage, nicht verfügbar in dieser mflux-Version.")
+        raise RuntimeError("Qwen needs QwenImage, not available in this mflux-Version.")
     seed = random.randint(0, 0xFFFFFFFFFFFFFFFF) if seed == -1 else int(seed)
     lora_paths, lora_scales = get_lora_info(Loras)
     inst = load_or_create_model("qwen-image", quantize, Local_model, lora_paths, lora_scales)
@@ -506,7 +483,7 @@ def generate_qwen(prompt, negative_prompt, seed, width, height, steps, guidance,
 def generate_qwen_edit(prompt, seed, width, height, steps, guidance, quantize,
                        image_paths: list, Local_model="", Loras=None):
     if not HAS_QWEN:
-        raise RuntimeError("Qwen Edit benötigt QwenImageEdit, nicht verfügbar in dieser mflux-Version.")
+        raise RuntimeError("Qwen Edit needs QwenImageEdit, not available in this mflux-Version.")
     seed = random.randint(0, 0xFFFFFFFFFFFFFFFF) if seed == -1 else int(seed)
     lora_paths, lora_scales = get_lora_info(Loras)
     inst = load_or_create_model("qwen-image", quantize, Local_model, lora_paths, lora_scales,

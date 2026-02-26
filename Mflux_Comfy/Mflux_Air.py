@@ -185,7 +185,7 @@ class MfluxCustomModels:
         # ── Load and save as quantized MLX model ────────────────────────────
         print(f"[MfluxCustomModels] Loading model (alias={alias}, q={q}bit, path={load_path}) ...")
 
-        model_config = ModelConfig.from_alias(alias)
+        model_config = ModelConfig.from_name(alias)
 
         common = dict(
             model_config=model_config,
@@ -221,10 +221,6 @@ class MfluxCustomModels:
     # ------------------------------------------------------------------ #
 
     def _convert_single_file_to_hf(self, safetensors_path: str, model: str) -> str:
-        """
-        Converts a single .safetensors file into a HuggingFace Diffusers
-        folder structure. Returns the path to the created HF folder.
-        """
         import torch
         from diffusers import FluxPipeline
 
@@ -427,11 +423,6 @@ class QuickMfluxNode:
                 full_prompt=full_prompt, extra_pnginfo=extra_pnginfo,
             )
         return generated
-
-
-# ---------------------------------------------------------------------------
-# Nodes für neue Varianten – nur definieren wenn Abhängigkeit vorhanden
-# ---------------------------------------------------------------------------
 
 if HAS_FILL:
     class MfluxFillNode:

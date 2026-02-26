@@ -9,7 +9,7 @@ from mflux.models.flux.variants.controlnet.controlnet_util import ControlnetUtil
 
 
 # ---------------------------------------------------------------------------
-# Pipeline-Datenklassen
+# Pipeline-Classes
 # ---------------------------------------------------------------------------
 
 class MfluxImg2ImgPipeline:
@@ -58,13 +58,11 @@ class MfluxFillPipeline:
 
 
 class MfluxImageRefPipeline:
-    """Universelle Referenzbild-Pipeline für Kontext, Depth, Redux, Qwen-Edit."""
     def __init__(self, image_paths: list):
         self.image_paths = image_paths  # immer eine Liste
 
     @property
     def image_path(self):
-        """Kurzform für Nodes die nur ein Bild erwarten."""
         return self.image_paths[0] if self.image_paths else None
 
     def clear_cache(self):
@@ -72,7 +70,7 @@ class MfluxImageRefPipeline:
 
 
 # ---------------------------------------------------------------------------
-# Hilfsfunktion: ComfyUI-Tensor → temporäre PNG
+# Hilfsfunktion: ComfyUI-Tensor → temp PNG
 # ---------------------------------------------------------------------------
 
 def _tensor_to_temp_path(tensor: torch.Tensor) -> str:
@@ -116,8 +114,10 @@ class MfluxImg2Img:
         if image_tensor is not None:
             # IMAGE tensor from another node overrides the file upload
             image_path = _tensor_to_temp_path(image_tensor)
+            print("[MfluxImg2Img] Using tensor from another node.")
         else:
             image_path = folder_paths.get_annotated_filepath(image_file)
+            print("[MfluxImg2Img] Using default image of the node.")
 
         with Image.open(image_path) as img:
             width, height = img.size
@@ -264,12 +264,12 @@ class MfluxFillLoader:
         return {
             "required": {
                 "image": (sorted(files), {"image_upload": True,
-                                          "tooltip": "Originalbild, das inpainting erhalten soll."}),
+                                          "tooltip": "Original image, which gets the inpainting."}),
                 "mask":  (sorted(files), {"image_upload": True,
-                                          "tooltip": "Maske (weiß = zu generieren, schwarz = beibehalten)."}),
+                                          "tooltip": "Mask (white = generate, black = stays original)."}),
             },
             "optional": {
-                "mask_tensor": ("MASK", {"tooltip": "Alternativ: Maske als ComfyUI-Mask-Tensor."}),
+                "mask_tensor": ("MASK", {"tooltip": "alternative: mask as ComfyUI-Mask-Tensor."}),
             }
         }
 
@@ -313,11 +313,6 @@ class MfluxFillLoader:
 # ---------------------------------------------------------------------------
 
 class MfluxImageRefLoader:
-    """
-    Lädt bis zu 4 Referenzbilder als MfluxImageRefPipeline.
-    Wird von Kontext-, Depth-, Redux- und Qwen-Edit-Nodes genutzt.
-    Akzeptiert auch IMAGE-Tensoren aus anderen ComfyUI-Nodes.
-    """
     @classmethod
     def INPUT_TYPES(cls):
         input_dir = folder_paths.get_input_directory()
@@ -330,8 +325,8 @@ class MfluxImageRefLoader:
                 "image2": (sorted(files), {"image_upload": True}),
                 "image3": (sorted(files), {"image_upload": True}),
                 "image4": (sorted(files), {"image_upload": True}),
-                "image_tensor1": ("IMAGE", {"tooltip": "Alternativ: Bild aus anderem ComfyUI-Node."}),
-                "image_tensor2": ("IMAGE", {"tooltip": "Alternativ: Bild aus anderem ComfyUI-Node."}),
+                "image_tensor1": ("IMAGE", {"tooltip": "alternative: Image from other node."}),
+                "image_tensor2": ("IMAGE", {"tooltip": "alternative: Image from other node."}),
             }
         }
 
@@ -355,7 +350,7 @@ class MfluxImageRefLoader:
                 paths.append(_tensor_to_temp_path(tensor))
 
         if not paths:
-            raise ValueError("MfluxImageRefLoader: Mindestens ein Bild erforderlich.")
+            raise ValueError("MfluxImageRefLoader: at least one Image required.")
 
         with Image.open(paths[0]) as img:
             width, height = img.size
@@ -368,14 +363,10 @@ class MfluxImageRefLoader:
 
 
 # ---------------------------------------------------------------------------
-# Node: MfluxScaleFactor  (Skalierungsfaktor für Img2Img)
+# Node: MfluxScaleFactor 
 # ---------------------------------------------------------------------------
 
 class MfluxScaleFactor:
-    """
-    Berechnet Ausgabedimensionen relativ zu einem Eingabebild.
-    Gibt width und height als INT zurück, direkt verwendbar in QuickMfluxNode.
-    """
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -383,10 +374,10 @@ class MfluxScaleFactor:
                 "image":        ("IMAGE",),
                 "scale_factor": ("FLOAT", {
                     "default": 2.0, "min": 0.25, "max": 8.0, "step": 0.25,
-                    "tooltip": "z.B. 2.0 = doppelte Auflösung, 0.5 = halbe Auflösung",
+                    "tooltip": "z.B. 2.0 = double resolution, 0.5 = half resolution",
                 }),
                 "round_to":     (["8", "16", "64"], {"default": "64",
-                                  "tooltip": "Auf welches Vielfaches runden (FLUX benötigt mind. 16)."}),
+                                  "tooltip": "Round to which basenumber? (FLUX needs at least 16)."}),
             }
         }
 
