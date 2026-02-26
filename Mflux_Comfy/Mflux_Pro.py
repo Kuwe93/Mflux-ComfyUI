@@ -94,9 +94,17 @@ class MfluxImg2Img:
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         return {
             "required": {
-                "image": (sorted(files), {"image_upload": True}),
+                "image_file": (sorted(files), {
+                    "image_upload": True,
+                    "tooltip": "Upload an image file from disk.",
+                }),
                 "image_strength": ("FLOAT", {"default": 0.4, "min": 0.0, "max": 1.0, "step": 0.01}),
-            }
+            },
+            "optional": {
+                "image_tensor": ("IMAGE", {
+                    "tooltip": "Connect any IMAGE output here to override the uploaded file (e.g. from Quick MFlux Generation).",
+                }),
+            },
         }
 
     CATEGORY = "MFlux/Pro"
@@ -104,20 +112,26 @@ class MfluxImg2Img:
     RETURN_NAMES = ("img2img", "width", "height")
     FUNCTION = "load_and_process"
 
-    def load_and_process(self, image, image_strength):
-        image_path = folder_paths.get_annotated_filepath(image)
+    def load_and_process(self, image_file, image_strength, image_tensor=None):
+        if image_tensor is not None:
+            # IMAGE tensor from another node overrides the file upload
+            image_path = _tensor_to_temp_path(image_tensor)
+        else:
+            image_path = folder_paths.get_annotated_filepath(image_file)
+
         with Image.open(image_path) as img:
             width, height = img.size
+
         return MfluxImg2ImgPipeline(image_path, image_strength), width, height
 
     @classmethod
-    def IS_CHANGED(cls, image, image_strength):
-        return (hash(image), round(float(image_strength), 2))
+    def IS_CHANGED(cls, image_file, image_strength, image_tensor=None):
+        return (hash(image_file), round(float(image_strength), 2))
 
     @classmethod
-    def VALIDATE_INPUTS(cls, image, image_strength):
-        if not folder_paths.exists_annotated_filepath(image):
-            return f"Invalid image file: {image}"
+    def VALIDATE_INPUTS(cls, image_file, image_strength, image_tensor=None):
+        if image_tensor is None and not folder_paths.exists_annotated_filepath(image_file):
+            return f"Invalid image file: {image_file}"
         if not isinstance(image_strength, (int, float)):
             return "Strength must be a number"
         return True

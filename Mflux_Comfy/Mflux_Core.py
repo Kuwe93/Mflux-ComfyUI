@@ -67,9 +67,42 @@ except ImportError:
 try:
     from mflux.models.z_image.variants.z_image import ZImage
     HAS_ZIMAGE = True
-except ImportError:
+except (ImportError, AttributeError):
     HAS_ZIMAGE = False
-    print("[Mflux] ZImage nicht verfügbar – Z-Image-Modelle deaktiviert")
+    print("[Mflux] ZImage not available")
+
+# ── FLUX.2 Edit ──────────────────────────────────────────────────────────────
+try:
+    from mflux.models.flux2.variants.edit.flux2_klein_edit import Flux2KleinEdit
+    HAS_FLUX2_EDIT = True
+except (ImportError, AttributeError):
+    HAS_FLUX2_EDIT = False
+    print("[Mflux] Flux2KleinEdit not available")
+
+# ── FLUX.1 In-Context ────────────────────────────────────────────────────────
+try:
+    from mflux.models.flux.variants.in_context.flux_in_context_dev import FluxInContextDev
+    from mflux.models.flux.variants.in_context.flux_in_context_fill import FluxInContextFill
+    HAS_IN_CONTEXT = True
+except (ImportError, AttributeError):
+    HAS_IN_CONTEXT = False
+    print("[Mflux] FluxInContext not available")
+
+# ── Fibo (Bria) ──────────────────────────────────────────────────────────────
+try:
+    from mflux.models.fibo.variants.txt2img.fibo import Fibo
+    HAS_FIBO = True
+except (ImportError, AttributeError):
+    HAS_FIBO = False
+    print("[Mflux] Fibo not available")
+
+# ── SeedVR2 (Upscaler) ───────────────────────────────────────────────────────
+try:
+    from mflux.models.seedvr2.variants.upscale.seedvr2 import SeedVR2
+    HAS_SEEDVR2 = True
+except (ImportError, AttributeError):
+    HAS_SEEDVR2 = False
+    print("[Mflux] SeedVR2 not available")
 
 # ── Qwen-Familie ────────────────────────────────────────────────────────────
 try:
@@ -121,8 +154,21 @@ if HAS_ZIMAGE:
 if HAS_QWEN:
     MODEL_FAMILY_MAP["qwen-image"] = ("qwen", "qwen-image")
 
+if HAS_FIBO:
+    MODEL_FAMILY_MAP["fibo"] = ("fibo", "fibo")
+
+if HAS_SEEDVR2:
+    MODEL_FAMILY_MAP["seedvr2"] = ("seedvr2", "seedvr2")
+
 # Distilled FLUX.2-Modelle benötigen guidance=1.0
 FLUX2_DISTILLED_MODELS = {"flux2-klein-4b", "flux2-klein-9b"}
+
+# Exports für __init__.py und Mflux_Air.py
+__all_flags__ = [
+    "HAS_FILL", "HAS_DEPTH", "HAS_REDUX", "HAS_KONTEXT", "HAS_QWEN",
+    "HAS_FLUX2", "HAS_FLUX2_EDIT", "HAS_ZIMAGE", "HAS_IN_CONTEXT",
+    "HAS_FIBO", "HAS_SEEDVR2",
+]
 
 # Alle Quantisierungsoptionen
 ALL_QUANTIZE_OPTIONS = ["None", "3", "4", "5", "6", "8"]
@@ -234,8 +280,8 @@ def load_or_create_model(model, quantize, local_path, lora_paths, lora_scales,
     #                  lora_paths=lora_paths, lora_scales=lora_scales)
 
     if family == "flux1":
-        # Flux1 erwartet 'local_path'
-        args = {**common_args, "local_path": path}
+        # Flux1 erwartet 'model_path'
+        args = {**common_args, "model_path": path}
         if variant == "controlnet":
             inst = Flux1Controlnet(**args)
         elif variant == "fill":
@@ -272,9 +318,19 @@ def load_or_create_model(model, quantize, local_path, lora_paths, lora_scales,
             inst = QwenImageEdit(**args)
         else:
             inst = QwenImage(**args)
+    elif family == "fibo":
+        if not HAS_FIBO:
+            raise RuntimeError("Fibo not available in this mflux version.")
+        inst = Fibo(**{**common_args, "model_path": path})
+
+    elif family == "seedvr2":
+        if not HAS_SEEDVR2:
+            raise RuntimeError("SeedVR2 not available in this mflux version.")
+        inst = SeedVR2(**{**common_args, "model_path": path})
+
     else:
         # Fallback auf Flux1
-        inst = Flux1(**{**common_args, "local_path": path})
+        inst = Flux1(**{**common_args, "model_path": path})
 
     return _evict_and_store(key, inst)
 

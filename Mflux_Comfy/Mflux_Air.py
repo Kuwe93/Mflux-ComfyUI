@@ -9,7 +9,9 @@ from .Mflux_Core import (
     MODEL_FAMILY_MAP,
     ALL_QUANTIZE_OPTIONS,
     FLUX2_DISTILLED_MODELS,
-    HAS_FILL, HAS_DEPTH, HAS_REDUX, HAS_KONTEXT, HAS_QWEN, HAS_FLUX2, HAS_ZIMAGE,
+    HAS_FILL, HAS_DEPTH, HAS_REDUX, HAS_KONTEXT, HAS_QWEN,
+    HAS_FLUX2, HAS_FLUX2_EDIT, HAS_ZIMAGE, HAS_IN_CONTEXT,
+    HAS_FIBO, HAS_SEEDVR2,
     resolve_model_alias,
     get_lora_info,
     generate_image,
@@ -33,9 +35,15 @@ if HAS_KONTEXT:
 if HAS_QWEN:
     from .Mflux_Core import generate_qwen, generate_qwen_edit
 if HAS_FLUX2:
-    from mflux.models.flux2.variants.txt2img.flux2 import Flux2
+    from mflux.models.flux2.variants.txt2img.flux2_klein import Flux2Klein as Flux2
+if HAS_FLUX2_EDIT:
+    from mflux.models.flux2.variants.edit.flux2_klein_edit import Flux2KleinEdit
 if HAS_ZIMAGE:
     from mflux.models.z_image.variants.z_image import ZImage
+if HAS_FIBO:
+    from mflux.models.fibo.variants.txt2img.fibo import Fibo
+if HAS_SEEDVR2:
+    from mflux.models.seedvr2.variants.upscale.seedvr2 import SeedVR2
 
 # ---------------------------------------------------------------------------
 # Konstanten
@@ -50,9 +58,8 @@ DOWNLOADER_MODELS = {
 }
 if HAS_KONTEXT:
     DOWNLOADER_MODELS["FLUX.1-Kontext-dev-4bit"] = "akx/FLUX.1-Kontext-dev-mflux-4bit"
-if HAS_FLUX2 or True:  # Alias funktioniert auch über Flux1
-    DOWNLOADER_MODELS["flux2-klein-4b-4bit"] = "madroid/flux2-klein-4b-mflux-4bit"
-    DOWNLOADER_MODELS["flux2-klein-9b-4bit"] = "madroid/flux2-klein-9b-mflux-4bit"
+if HAS_FLUX2:
+    DOWNLOADER_MODELS["FLUX2-klein-4B-mlx-8bit"] = "AITRADER/FLUX2-klein-4B-mlx-8bit"
 if HAS_ZIMAGE:
     DOWNLOADER_MODELS["Z-Image-Turbo-4bit"] = "filipstrand/Z-Image-Turbo-mflux-4bit"
 
@@ -119,40 +126,210 @@ class MfluxCustomModels:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model":    (ALL_MODEL_ALIASES, {"default": "schnell"}),
+                "model": (ALL_MODEL_ALIASES, {
+                    "default": "schnell",
+                    "tooltip": (
+                        "Base architecture of the model. "
+                        "Must match the architecture of the folder you provide."
+                    ),
+                }),
                 "quantize": (["3", "4", "5", "6", "8"], {"default": "4"}),
             },
             "optional": {
+                "external_model_path": ("STRING", {
+                    "default": "",
+                    "tooltip": (
+                        "Absolute path to a HuggingFace model folder "
+                        "(must contain subfolders like transformer/, vae/, tokenizer/, …). "
+                        "Leave empty to download the base model from HuggingFace automatically."
+                    ),
+                }),
                 "Loras": ("MfluxLorasPipeline",),
-                "custom_identifier": ("STRING", {"default": ""}),
+                "custom_identifier": ("STRING", {
+                    "default": "my_quant",
+                    "tooltip": "Name suffix for the saved model folder inside models/Mflux/.",
+                }),
             },
         }
+
     RETURN_TYPES = ("PATH",)
     RETURN_NAMES = ("Custom_model",)
     CATEGORY = "MFlux/Air"
     FUNCTION = "save_model"
 
-    def save_model(self, model, quantize, Loras=None, custom_identifier=""):
+    def save_model(self, model, quantize, external_model_path="", Loras=None, custom_identifier=""):
         identifier = custom_identifier if custom_identifier else "default"
         save_dir = get_full_model_path(mflux_dir, f"Mflux-{model}-{quantize}bit-{identifier}")
         create_directory(save_dir)
         lora_paths, lora_scales = get_lora_info(Loras)
         family, alias = resolve_model_alias(model, "")
-        model_config = ModelConfig.from_alias(alias)
         q = int(quantize)
 
-        if family == "flux2" and HAS_FLUX2:
-            inst = Flux2(model_config=model_config, quantize=q,
-                         lora_paths=lora_paths, lora_scales=lora_scales)
-        elif family == "zimage" and HAS_ZIMAGE:
-            inst = ZImage(model_config=model_config, quantize=q,
-                          lora_paths=lora_paths, lora_scales=lora_scales)
+        # ── Resolve input path ──────────────────────────────────────────────
+        load_path = None  # None → mflux downloads the base model from HuggingFace
+
+        if external_model_path and external_model_path.strip():
+            path = external_model_path.strip()
+
+            if not os.path.exists(path):
+                raise ValueError(f"Path does not exist: {path}")
+
+            if not os.path.isdir(path):
+                raise ValueError(
+                    f"Expected a HuggingFace model folder, got a file: {path}\n"
+                    f"Please convert your model to HF folder format first, then point to the folder."
+                )
+
+            load_path = path
+
+        # ── Load and save as quantized MLX model ────────────────────────────
+        print(f"[MfluxCustomModels] Loading model (alias={alias}, q={q}bit, path={load_path}) ...")
+
+        model_config = ModelConfig.from_alias(alias)
+
+        common = dict(
+            model_config=model_config,
+            quantize=q,
+            model_path=load_path,
+            lora_paths=lora_paths,
+            lora_scales=lora_scales,
+        )
+
+        if family == "flux2":
+            if not HAS_FLUX2:
+                raise RuntimeError("Flux2 could not be imported. Run: pip install -U mflux")
+            inst = Flux2(**common)
+        elif family == "zimage":
+            if not HAS_ZIMAGE:
+                raise RuntimeError("ZImage could not be imported. Run: pip install -U mflux")
+            inst = ZImage(**common)
+        elif family == "fibo":
+            if not HAS_FIBO:
+                raise RuntimeError("Fibo could not be imported. Run: pip install -U mflux")
+            inst = Fibo(**common)
+        elif family == "seedvr2":
+            if not HAS_SEEDVR2:
+                raise RuntimeError("SeedVR2 could not be imported. Run: pip install -U mflux")
+            inst = SeedVR2(**common)
         else:
-            inst = Flux1(model_config=model_config, quantize=q,
-                         lora_paths=lora_paths, lora_scales=lora_scales)
+            inst = Flux1(**common)
 
         inst.save_model(save_dir)
-        print(f"Model saved to {save_dir}")
+        print(f"[MfluxCustomModels] Model saved: {save_dir}")
+        return (save_dir,)
+
+    # ------------------------------------------------------------------ #
+
+    def _convert_single_file_to_hf(self, safetensors_path: str, model: str) -> str:
+        """
+        Converts a single .safetensors file into a HuggingFace Diffusers
+        folder structure. Returns the path to the created HF folder.
+        """
+        import torch
+        from diffusers import FluxPipeline
+
+        # Target folder: same location as source file, without extension
+        base = os.path.splitext(safetensors_path)[0]
+        hf_dir = base + "_hf"
+
+        if os.path.exists(hf_dir):
+            print(f"[MfluxCustomModels] HF conversion already exists: {hf_dir}")
+            return hf_dir
+
+        print(f"[MfluxCustomModels] Converting {safetensors_path} → {hf_dir} ...")
+        print(f"[MfluxCustomModels] This may take several minutes and requires ~30 GB of RAM.")
+
+        # The model architecture determines which pipeline class to use.
+        # For all FLUX.1 variants (dev, schnell, krea-dev, kontext-dev) and
+        # FLUX.2 (until a dedicated Diffusers loader exists) we use
+        # FluxPipeline as a shared loader.
+        try:
+            pipe = FluxPipeline.from_single_file(
+                safetensors_path,
+                torch_dtype=torch.bfloat16,
+            )
+            pipe.save_pretrained(hf_dir)
+            del pipe  # free RAM
+            print(f"[MfluxCustomModels] Conversion complete: {hf_dir}")
+            return hf_dir
+
+        except Exception as e:
+            # Clean up if the folder was partially created
+            import shutil
+            if os.path.exists(hf_dir):
+                shutil.rmtree(hf_dir, ignore_errors=True)
+            raise RuntimeError(
+                f"Conversion failed: {e}\n"
+                f"Make sure 'diffusers' and 'torch' are installed "
+                f"and that the file is a valid FLUX checkpoint."
+            )
+
+    # ------------------------------------------------------------------ #
+
+    def save_model(self, model, quantize, external_model_path="", Loras=None, custom_identifier=""):
+        identifier = custom_identifier if custom_identifier else "default"
+        save_dir = get_full_model_path(mflux_dir, f"Mflux-{model}-{quantize}bit-{identifier}")
+        create_directory(save_dir)
+        lora_paths, lora_scales = get_lora_info(Loras)
+        family, alias = resolve_model_alias(model, "")
+        q = int(quantize)
+
+        # ── Resolve input path ──────────────────────────────────────────
+        load_path = None  # None → mflux downloads from HuggingFace
+
+        if external_model_path and external_model_path.strip():
+            path = external_model_path.strip()
+
+            if not os.path.exists(path):
+                raise ValueError(f"Path does not exist: {path}")
+
+            if os.path.isfile(path):
+                # Single file → convert to HF format first
+                if not path.lower().endswith(".safetensors"):
+                    raise ValueError(
+                        f"Single files must be in .safetensors format, "
+                        f"got: {path}"
+                    )
+                load_path = self._convert_single_file_to_hf(path, model)
+
+            elif os.path.isdir(path):
+                # Folder → use directly (HF format or already MLX)
+                load_path = path
+
+        # ── Load model and save as quantized MLX model ──────────────────
+        print(f"[MfluxCustomModels] Loading model (alias={alias}, q={q}bit, path={load_path}) ...")
+
+        model_config = ModelConfig.from_name(alias)
+
+        common = dict(
+            model_config=model_config,
+            quantize=q,
+            model_path=load_path,
+            lora_paths=lora_paths,
+            lora_scales=lora_scales,
+        )
+
+        if family == "flux2":
+            if not HAS_FLUX2:
+                raise RuntimeError("Flux2 could not be imported. Run: pip install -U mflux")
+            inst = Flux2(**common)
+        elif family == "zimage":
+            if not HAS_ZIMAGE:
+                raise RuntimeError("ZImage could not be imported. Run: pip install -U mflux")
+            inst = ZImage(**common)
+        elif family == "fibo":
+            if not HAS_FIBO:
+                raise RuntimeError("Fibo could not be imported. Run: pip install -U mflux")
+            inst = Fibo(**common)
+        elif family == "seedvr2":
+            if not HAS_SEEDVR2:
+                raise RuntimeError("SeedVR2 could not be imported. Run: pip install -U mflux")
+            inst = SeedVR2(**common)
+        else:
+            inst = Flux1(**common)
+
+        inst.save_model(save_dir)
+        print(f"[MfluxCustomModels] Model saved: {save_dir}")
         return (save_dir,)
 
 
