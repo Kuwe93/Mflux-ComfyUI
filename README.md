@@ -1,252 +1,137 @@
-<h1 align="center">Quick Mflux on Comfyui</h1>
+<h1 align="center">Quick Mflux on ComfyUI</h1>
 
 <p align="center">
-    <br> <font size=5>English | <a href="README_zh.md">中文</a></font>
+  <font size=5>English</font>
 </p>
 
-# Quick Mflux on Comfyui
+Simple use of [mflux](https://github.com/filipstrand/mflux) in ComfyUI, suitable for users who are not familiar with terminal usage.
+**Only for macOS (Apple Silicon).** This is a fork of [raysers/Mflux-ComfyUI](https://github.com/raysers/Mflux-ComfyUI) updated to mflux 0.16.6 with support for all current model families and new generation modes made with claude.ai.
+
+> NOTE: A MLX port of FLUX and other state-of-the-art diffusion models based on the Huggingface Diffusers implementation.
+
+---
+
+## ✨ What's new in this fork (mflux 0.16.6)
 
-## Introduction
-Simple use of Mflux in ComfyUI, suitable for users who are not familiar with terminal usage. Only for MacOS.
+### New model families
+In addition to the classic FLUX.1-schnell and FLUX.1-dev, the following model families are now supported:
 
-## Acknowledgements
+| Model | Family | Notes |
+|---|---|---|
+| `schnell`, `dev` | FLUX.1 | Classic, unchanged |
+| `krea-dev`, `kontext-dev` | FLUX.1 | New variants |
+| `flux2-klein-4b`, `flux2-klein-9b` | FLUX.2 | Distilled, fast — guidance locked to 1.0 |
+| `flux2-base-4b`, `flux2-base-9b`, `flux2-dev` | FLUX.2 | Full FLUX.2 variants |
+| `z-image-turbo`, `z-image-base` | Z-Image | Tongyi Lab models |
+| `qwen-image` | Qwen | Multilingual prompts + negative prompt support |
 
-Thanks to the developers of the [**mflux**](https://github.com/filipstrand/mflux) project, especially the initiator **@filipstrand** and active contributor **@anthonywu**, for making it easier and more efficient for Mac users to generate flux model images. These contributions are truly delightful—thank you!
+### Extended quantization
+Quantization now supports **3, 4, 5, 6 and 8-bit** (previously only 4 and 8-bit).
 
-mflux:  
-https://github.com/filipstrand/mflux
+### New generation nodes
+Six new generation nodes for modes that were not previously available:
 
-Thanks also to **@CharafChnioune**, the author of [**MFLUX-WEBUI**](https://github.com/CharafChnioune/MFLUX-WEBUI), from whom I partially referenced some code. In compliance with the Apache 2.0 license used in his project, I have added license comments in the referenced sections of my code.
+| Node | Function |
+|---|---|
+| **MFlux Fill (Inpainting)** | Fill masked regions of an image using a text prompt |
+| **MFlux Depth Conditioning** | Generate images guided by the depth structure of a reference image |
+| **MFlux Redux (Image Variation)** | Create image variations without a text prompt |
+| **MFlux Kontext (Image Editing)** | Edit images with natural language instructions (e.g. "change the background to a sunset") |
+| **MFlux Qwen Image** | Text-to-image with multilingual prompts and negative prompt support |
+| **MFlux Qwen Image Edit** | Semantic image editing with 1–4 reference images |
 
-## Installation Guide
-1. `cd /path/to/your_ComfyUI`
-2. Activate the virtual environment
-3. `cd custom_nodes`
-4. `git clone https://github.com/raysers/Mflux-ComfyUI.git`
-5. `pip install mflux==0.4.1`
-6. Restart ComfyUI
+### New input helper nodes
+| Node | Function |
+|---|---|
+| **MFlux Fill Loader** | Loads image + mask (file upload or ComfyUI MASK tensor) for the Fill node |
+| **MFlux Image Ref Loader** | Loads 1–4 reference images (upload or IMAGE tensor) for Kontext, Depth, Redux and Qwen Edit |
+| **MFlux Scale Factor** | Calculates output dimensions from input image × scale factor (e.g. 2× for upscaling) |
 
-Alternatively, you can search for "Mflux-ComfyUI" in ComfyUI-Manager for a quick installation.
+### MFlux LoRAs Loader extended
+The LoRA loader now has an optional `hf_lora` text input for loading LoRAs directly from HuggingFace without manual download — just enter `author/repo` or `author/repo:filename.safetensors`.
 
-## Update Announcement
+---
 
-### **About This Update:**
+## Installation
 
-- The ControlNet node integrates images and intensity to distinguish it from img2img — contribution from @InformEthics.
+```bash
+cd /path/to/your_ComfyUI
+# Activate your virtual environment
+cd custom_nodes
+git clone https://github.com/Kuwe93/Mflux-ComfyUI.git
+pip install mflux==0.16.6
+# Restart ComfyUI
+```
 
-This is the first time other contributors have participated in updating this plugin. Thanks @InformEthics.
+---
 
-### **Previous Updates Recap:**
+## Node overview
 
-- Bring back the missing metadata
+All nodes can be found by double-clicking the canvas and searching for **"MFlux"** or **"Mflux"**.
 
-The Quick MFlux Generation node has metadata enabled by default (set to True). This means that the generated images will be automatically saved under ComfyUI/output/Mflux, along with a JSON file that shares the same name as the image.
+### MFlux/Air — Generation nodes
 
-In the ComfyUI directory, you can also use the mflux-generate --config-from-metadata command to load a JSON file and use the original mflux to generate images.
+| Node | Category | Description |
+|---|---|---|
+| Quick MFlux Generation | Air | Standard txt2img / img2img / ControlNet for all model families |
+| MFlux Models Loader | Air | Load a locally saved model from `models/Mflux/` |
+| MFlux Models Downloader | Air | Download pre-quantized models from HuggingFace |
+| MFlux Custom Models | Air | Quantize and save any supported model locally |
+| MFlux Fill (Inpainting) | Air | FLUX.1 Fill — inpaint masked image regions |
+| MFlux Depth Conditioning | Air | FLUX.1 Depth — depth-guided image generation |
+| MFlux Redux (Image Variation) | Air | FLUX.1 Redux — image variations without a text prompt |
+| MFlux Kontext (Image Editing) | Air | FLUX.1 Kontext — natural language image editing |
+| MFlux Qwen Image | Air | Qwen txt2img with negative prompt |
+| MFlux Qwen Image Edit | Air | Qwen semantic image editing with reference images |
 
-Example:
+### MFlux/Pro — Input helper nodes
 
-![Mflux_Metadata](examples/Mflux_Metadata.png)
+| Node | Category | Description |
+|---|---|---|
+| MFlux Img2Img | Pro | Load an image + strength for img2img use in Quick MFlux Generation |
+| MFlux LoRAs Loader | Pro | Load up to 3 LoRAs (chainable), now also supports HuggingFace LoRA strings |
+| MFlux ControlNet Loader | Pro | Load a Canny control image for FLUX.1 ControlNet |
+| MFlux Fill Loader | Pro | Load image + mask for Fill/Inpainting |
+| MFlux Image Ref Loader | Pro | Load 1–4 reference images for Kontext / Depth / Redux / Qwen Edit |
+| MFlux Scale Factor | Pro | Compute scaled width/height for upscaling workflows |
 
-The advantage of the original version is its clean memory management: it automatically releases memory after each generation, as can be observed in the Activity Monitor.
+---
 
-If you'd like to experience the original mflux, this provides an additional option.
+## Models
 
-- Added progress bar and interruption functionality in ComfyUI. Click the built-in cancel button (the cross icon) to interrupt.  
-- Customizable file paths.  
-- Image-to-Image generation.
+### Downloading pre-quantized models
+Use the **MFlux Models Downloader** node. Available models include FLUX.1-schnell 4-bit, FLUX.1-dev 4-bit, FLUX.1-Kontext-dev 4-bit, FLUX.2-Klein 4-bit and Z-Image-Turbo 4-bit.
 
-mflux has been updated to version 0.4.1. To experience image-to-image generation, please upgrade in ComfyUI with:
+### Saving custom quantized models
+Use **MFlux Custom Models** to quantize any supported model (3/4/5/6/8-bit) and save it to `models/Mflux/`. Once saved, load it with **MFlux Models Loader** for all future generations.
 
-`pip install --upgrade mflux`
+### LoRA usage note
+LoRAs and pre-quantized local models are **mutually exclusive** — you cannot load a LoRA on top of an already-quantized local model. To use both, quantize the model with the LoRA baked in using **MFlux Custom Models**.
+I usually keep a `models/loras/Mflux/` subfolder for mflux-compatible LoRAs.
 
-## Usage Instructions
+---
 
-Right-click to create nodes:
+## Metadata
+The **metadata** option (default: True) automatically saves generated images to `ComfyUI/output/MFlux/` alongside a JSON sidecar file with all generation parameters. The JSON now also includes `model_family` and `model_alias` fields for the new model families.
 
-Under **MFlux/Air**:
+---
 
-- **Quick MFlux Generation**  
-- **MFlux Models Loader**
-- **MFlux Models Downloader**
-- **MFlux Custom Models**
+## Tips
 
-Under **MFlux/Pro**:
+- **Guidance for FLUX.2-Klein**: The distilled Klein models (4b/9b) automatically lock guidance to 1.0 — setting a different value has no effect.
+- **Qwen**: 8-bit quantization is recommended for best quality. Multilingual prompts are supported natively.
+- **Kontext guidance**: Values between 2.0 and 4.0 work best for image editing tasks.
+- **Fill guidance**: High guidance values (20–50) are recommended for inpainting.
+- **Scale Factor**: Use the **MFlux Scale Factor** node to chain upscaling into any img2img workflow without manually calculating dimensions.
+- If nodes show in red after installation, use ComfyUI-Manager's **"One-click Install Missing Nodes"**.
+- Preview nodes do not auto-save — replace with a Save Image node or right-click to save manually.
 
-- **Mflux Img2Img**
-- **MFlux Loras Loader**  
-- **MFlux ControlNet Loader**
+---
 
+## Credits
 
-Or double-click in the blank area of the canvas to bring up the node search box, and directly search for the node names by the keyword “Mflux.”
-
-
-### Basic Path Explanation
-
-Quantized Models:
-
-**ComfyUI/models/Mflux**
-
-LoRA:
-
-**ComfyUI/models/loras**
-
-I usually create an **Mflux** folder under **models/loras** to manage the LoRAs compatible with Mflux, storing them uniformly. Therefore, in my example, the retrieved files should be Mflux/*******.safetensors.
-
-Native Full Models & ControlNet:
-
-**Yourusername/.cache**
-
-Although the current node **Mflux Models Downloader** can automatically download, I would still like to share a few links to quantized models as a token of appreciation:
-
-- [madroid/flux.1-schnell-mflux-4bit](https://huggingface.co/madroid/flux.1-schnell-mflux-4bit)
-- [madroid/flux.1-dev-mflux-4bit](https://huggingface.co/madroid/flux.1-dev-mflux-4bit)
-- [AITRADER/MFLUX.1-schnell-8-bit](https://huggingface.co/AITRADER/MFLUX.1-schnell-8-bit)
-- [AITRADER/MFLUX.1-dev-8-bit](https://huggingface.co/AITRADER/MFLUX.1-dev-8-bit)
-
-Of course, there are also the most important native full models from Black Forest:
-
-- [black-forest-labs/FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell)
-- [black-forest-labs/FLUX.1-dev](https://huggingface.co/black-forest-labs/FLUX.1-dev)
-
-Additionally, here is the FLUX.1-dev-Controlnet-Canny model from the InstantX team:
-
-- [InstantX/FLUX.1-dev-Controlnet-Canny](https://huggingface.co/InstantX/FLUX.1-dev-Controlnet-Canny)
-
-
-## Workflow
-
-### **Mflux Air:**
-
-#### text2img:
-
-![text2img](examples/Air.png)
-
-This basic workflow will download the full versions of dev or schnell to `.cache` from Hugging Face, both of which are over 33GB and may put a strain on hard drive space.
-
-Of course, using quantized models will greatly save hard drive space. If you want to use quantized models, you can directly connect to the **Mflux Models Downloader** node to download quantized models from Hugging Face, such as:
-
-![text2img](examples/Air_Downloaded_models.png)
-
-
-Alternatively, you can use the full version of the Black Forest model that is pre-existing in `.cache` to create your custom model through **Mflux Custom Models**:
-
-For instance, the default quantized version, which is the same as the basic quantized model downloaded from Hugging Face:
-
-![text2img](examples/Air_Custom_models_default.png)
-
-Or the LoRA stacked version, which allows for quantization after stacking LoRAs, thereby creating a unique model:
-
-![text2img](examples/Air_Custom_models_loras.png)
-
-The drawback of this LoRA custom model is that it essentially remains a quantized model. If you try to stack LoRAs again in **Quick MFlux Generation**, it will result in an error.
-
-Here, we can extract a mutual exclusion rule: LoRAs and quantized models cannot be used simultaneously; you can only choose one. To achieve the best of both worlds, you can only generate a LoRA custom model through this pre-quantization stacking.
-
-However, if you want to quickly generate multiple images in the same LoRA style and your machine configuration is not very high (for example, mine has 16GB), using this method can serve as a compromise for achieving LoRA results. You can delete this unique model once the generation is complete.
-
-Note that the `custom_identifier` in the **Mflux Custom Models** node is not a mandatory field. If you do not need a specific identifier for distinction, you can leave it empty.
-
-
-Whether you are downloading models from Hugging Face or creating custom models, they only need to be **run once**. As long as you save the model, you can use the **Mflux Models Loader** node to retrieve them, such as:
-
-![text2img](examples/Air_Local_models.png)
-
-
-This update also adds the option to manually input paths. Alternatively, you can clear the **models/Mflux** folder, which will show "NONE" in the selection list, and then you can enter your own model path in `free_path`.
-
-
-#### img2img:
-
-![img2img](examples/Air_img2img.png)
-
-I am still exploring the specific usage methods. If you have experiences worth sharing, please feel free to start a discussion in the issues.
-
-
-### **Mflux Pro:**
-
-
-#### Loras:
-
-![Loras](examples/Pro_Loras.png)
-
-In the image, two **Mflux Loras Loader** nodes are used just to illustrate that they can be chained together, meaning you can theoretically load countless LoRAs...
-
-Please note that you cannot use the **Mflux Models Loader** node to load quantized models when using LoRAs; doing so will result in an error. This further verifies the mutual exclusion rule mentioned above.
-
-Perhaps one day the official team will resolve this error; let's wait patiently.
-
-Note:
-
-Not all LoRAs are compatible with Mflux. Please check the official homepage for specific compatible types:
-
-https://github.com/filipstrand/mflux
-
-Therefore, I typically create an **Mflux** folder under **models/loras** to store all LoRAs compatible with Mflux in one place.
-
-
-#### ControlNet:
-
-![ControlNet](examples/Pro_ControlNet.png)
-
-Mflux's ControlNet currently only supports Canny.
-
-P.S. To quickly generate example images, I created a custom model using a 4-step LoRA from the dev model.
-
-The advantage of this 4-step LoRA model is that it still belongs to the DEV model, so the Guidance parameter can be effective, and it can produce images in just four steps while retaining the advantages of schnell.
-
-
-
-### **Mflux Plus:**
-
-![Translate + Mflux](examples/Plus1.png)
-
-A must-have for English beginners.
-
-
-![Florence2 + Mflux](examples/Plus2.png)
-
-Image reverse generation, using the MiaoshouAI/Florence-2-large-PromptGen-v1.5 visual model here.
-
-All these processes can be dragged directly into ComfyUI from the workflows folder.
-
-!!! If nodes are highlighted in red, use ComfyUI-Manager's "One-click Install Missing Nodes."
-!!! Please note that all processes at the end use preview nodes, which do not automatically save. You need to manually save the generated images you are satisfied with or simply replace the preview nodes with save nodes.
-
-### **Possible Explorations**
-
-#### **Mflux MAX:**
-
-......
-
-#### **Mflux Ultra:**
-
-......
-
-Here, I hope everyone shares their workflows more, fully promoting the spirit of sharing on the internet. Knowledge for payment? No, I advocate cooperation and sharing for mutual benefit.
-
-## **Planning**
-
-Official Website Overview of Mflux 0.4.x Features:
-
-- Img2Img Support: Introduced the ability to generate images based on an initial reference image.
-- Image Generation from Metadata: Added support to generate images directly from provided metadata files.
-- Progressive Step Output: Optionally output each step of the image generation process, allowing for real-time monitoring.
-
-Previous updates have already completed the Img2Img functionality. Additionally, MFlux 0.4.x introduced a keyboard interruption feature, which was implemented in the last update using ComfyUI's cancel button.
-
-This update focuses on completing the functionality to generate images from metadata.
-
-The next step is to complete the implementation of the remaining features as much as possible.
-
-Please pay attention to the official website：
-
-[https://github.com/filipstrand/mflux](https://github.com/filipstrand/mflux)
-
-## **Contribution**
-
-Interactive communication is all a contribution.
-
-## License
-
-I would like to adopt the MIT License consistent with the Mflux project, contributing my part to the open-source community.
+Special thanks to:
+- [@filipstrand](https://github.com/filipstrand) and [@anthonywu](https://github.com/anthonywu) for the [mflux](https://github.com/filipstrand/mflux) project
+- [@raysers](https://github.com/raysers) for the original [Mflux-ComfyUI](https://github.com/raysers/Mflux-ComfyUI) plugin this fork is based on
+- [@CharafChnioune](https://github.com/CharafChnioune) for [MFLUX-WEBUI](https://github.com/CharafChnioune/MFLUX-WEBUI) — portions of the original code were referenced under the Apache 2.0 license
+- [@InformEthics](https://github.com/InformEthics) for the original ControlNet node contribution
