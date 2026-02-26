@@ -5,7 +5,7 @@ import torch
 from PIL import Image
 import folder_paths
 
-from mflux.controlnet.controlnet_util import ControlnetUtil
+from mflux.models.flux.variants.controlnet.controlnet_util import ControlnetUtil
 
 
 # ---------------------------------------------------------------------------

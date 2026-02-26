@@ -14,12 +14,12 @@ import folder_paths
 # ---------------------------------------------------------------------------
 
 # ── Immer verfügbar (FLUX.1-Kern) ──────────────────────────────────────────
-from mflux.models.common.config import ModelConfig
+from mflux.models.common.config.model_config import ModelConfig
 from mflux.models.flux.variants.txt2img.flux import Flux1
 from mflux.models.flux.variants.controlnet.flux_controlnet import Flux1Controlnet
 from mflux.models.flux.latent_creator.flux_latent_creator import FluxLatentCreator
-from mflux.post_processing.image_util import ImageUtil
-from mflux.controlnet.controlnet_util import ControlnetUtil
+from mflux.utils.image_util import ImageUtil
+from mflux.models.flux.variants.controlnet.controlnet_util import ControlnetUtil
 
 # ── FLUX.1-Varianten (seit ~0.9) ───────────────────────────────────────────
 try:
@@ -210,52 +210,71 @@ def load_or_create_model(model, quantize, local_path, lora_paths, lora_scales,
 
     if key in _model_cache:
         return _model_cache[key]
+    
+    # Basis-Konfiguration
+    m_config = ModelConfig.from_name(alias)
 
-    std_kwargs = dict(
-        model_config=ModelConfig.from_alias(alias),
-        quantize=q,
-        local_path=path,
-        lora_paths=lora_paths,
-        lora_scales=lora_scales,
-    )
-    path_kwargs = dict(quantize=q, model_path=path,
-                       lora_paths=lora_paths, lora_scales=lora_scales)
+    # Wir bauen die Argumente dynamisch zusammen
+    # mflux 0.16.x: Flux1 nutzt local_path, ZImage/Flux2 nutzen model_path
+    common_args = {
+        "model_config": m_config,
+        "quantize": q,
+        "lora_paths": lora_paths,
+        "lora_scales": lora_scales,
+    }
+
+    #std_kwargs = dict(
+    #    model_config=ModelConfig.from_name(alias),
+    #    quantize=q,
+    #    local_path=path,
+    #    lora_paths=lora_paths,
+    #    lora_scales=lora_scales,
+    #)
+    #path_kwargs = dict(quantize=q, model_path=path,
+    #                  lora_paths=lora_paths, lora_scales=lora_scales)
 
     if family == "flux1":
+        # Flux1 erwartet 'local_path'
+        args = {**common_args, "local_path": path}
         if variant == "controlnet":
-            inst = Flux1Controlnet(**std_kwargs)
+            inst = Flux1Controlnet(**args)
         elif variant == "fill":
             if not HAS_FILL:
                 raise RuntimeError("Flux1Fill nicht verfügbar in dieser mflux-Version.")
-            inst = Flux1Fill(**path_kwargs)
+            inst = Flux1Fill(quantize=q, model_path=path, lora_paths=lora_paths, lora_scales=lora_scales)
         elif variant == "depth":
             if not HAS_DEPTH:
                 raise RuntimeError("Flux1Depth nicht verfügbar in dieser mflux-Version.")
-            inst = Flux1Depth(**path_kwargs)
+            inst = Flux1Depth(quantize=q, model_path=path, lora_paths=lora_paths, lora_scales=lora_scales)
         elif variant == "redux":
             if not HAS_REDUX:
                 raise RuntimeError("Flux1Redux nicht verfügbar in dieser mflux-Version.")
-            inst = Flux1Redux(quantize=q, model_path=path)
+            inst = Flux1Redux(quantize=q, model_path=path, lora_paths=lora_paths, lora_scales=lora_scales)
         elif variant == "kontext":
             if not HAS_KONTEXT:
                 raise RuntimeError("Flux1Kontext nicht verfügbar in dieser mflux-Version.")
-            inst = Flux1Kontext(**path_kwargs)
+            inst = Flux1Kontext(**args)
         else:
-            inst = Flux1(**std_kwargs)
+            inst = Flux1(**args)
 
     elif family == "flux2":
-        inst = Flux2(**std_kwargs)
+        iargs = {**common_args, "model_path": path}
+        inst = Flux2(**args)
 
     elif family == "zimage":
-        inst = ZImage(**std_kwargs)
+        # ZImage erwartet ebenfalls 'model_path'
+        args = {**common_args, "model_path": path}
+        inst = ZImage(**args)
 
     elif family == "qwen":
+        args = {"quantize": q, "model_path": path, "lora_paths": lora_paths, "lora_scales": lora_scales}
         if variant == "edit":
-            inst = QwenImageEdit(**path_kwargs)
+            inst = QwenImageEdit(**args)
         else:
-            inst = QwenImage(**path_kwargs)
+            inst = QwenImage(**args)
     else:
-        inst = Flux1(**std_kwargs)
+        # Fallback auf Flux1
+        inst = Flux1(**{**common_args, "local_path": path})
 
     return _evict_and_store(key, inst)
 
@@ -338,11 +357,17 @@ def generate_image(prompt, model, seed, width, height, steps, guidance,
         return (tensor,)
 
     inst = load_or_create_model(model, quantize, Local_model, lora_paths, lora_scales)
-    generated = inst.generate_image(
-        prompt=prompt, seed=seed, num_inference_steps=steps,
-        width=width, height=height, guidance=guidance,
-        init_image_path=image_path, init_image_strength=image_strength,
-    )
+
+    gen_kwargs = {
+        "prompt": prompt,
+        "seed": seed,
+        "num_inference_steps": steps,
+        "width": width,
+        "height": height,
+        "guidance": guidance,
+    }
+
+    generated = inst.generate_image(**gen_kwargs)
     return (_tensor_from_image(generated),)
 
 
