@@ -4,22 +4,15 @@ from huggingface_hub import snapshot_download
 from folder_paths import models_dir
 from mflux.models.common.config import ModelConfig
 from mflux.models.flux.variants.txt2img.flux import Flux1
-from mflux.models.flux2.variants.txt2img.flux2 import Flux2
-from mflux.models.z_image.variants.z_image import ZImage
 
 from .Mflux_Core import (
     MODEL_FAMILY_MAP,
     ALL_QUANTIZE_OPTIONS,
     FLUX2_DISTILLED_MODELS,
+    HAS_FILL, HAS_DEPTH, HAS_REDUX, HAS_KONTEXT, HAS_QWEN, HAS_FLUX2, HAS_ZIMAGE,
     resolve_model_alias,
     get_lora_info,
     generate_image,
-    generate_fill,
-    generate_depth,
-    generate_redux,
-    generate_kontext,
-    generate_qwen,
-    generate_qwen_edit,
     save_images_with_metadata,
 )
 from .Mflux_Pro import (
@@ -27,6 +20,22 @@ from .Mflux_Pro import (
     MfluxImageRefPipeline,
     _tensor_to_temp_path,
 )
+
+# Nur importieren wenn verfügbar
+if HAS_FILL:
+    from .Mflux_Core import generate_fill
+if HAS_DEPTH:
+    from .Mflux_Core import generate_depth
+if HAS_REDUX:
+    from .Mflux_Core import generate_redux
+if HAS_KONTEXT:
+    from .Mflux_Core import generate_kontext
+if HAS_QWEN:
+    from .Mflux_Core import generate_qwen, generate_qwen_edit
+if HAS_FLUX2:
+    from mflux.models.flux2.variants.txt2img.flux2 import Flux2
+if HAS_ZIMAGE:
+    from mflux.models.z_image.variants.z_image import ZImage
 
 # ---------------------------------------------------------------------------
 # Konstanten
@@ -38,12 +47,14 @@ DOWNLOADER_MODELS = {
     "flux.1-dev-mflux-4bit":      "madroid/flux.1-dev-mflux-4bit",
     "MFLUX.1-schnell-8-bit":      "AITRADER/MFLUX.1-schnell-8-bit",
     "MFLUX.1-dev-8-bit":          "AITRADER/MFLUX.1-dev-8-bit",
-    "FLUX.1-Kontext-dev-4bit":    "akx/FLUX.1-Kontext-dev-mflux-4bit",
-    "FLUX.1-Krea-dev-4bit":       "filipstrand/FLUX.1-Krea-dev-mflux-4bit",
-    "flux2-klein-4b-4bit":        "madroid/flux2-klein-4b-mflux-4bit",
-    "flux2-klein-9b-4bit":        "madroid/flux2-klein-9b-mflux-4bit",
-    "Z-Image-Turbo-4bit":         "filipstrand/Z-Image-Turbo-mflux-4bit",
 }
+if HAS_KONTEXT:
+    DOWNLOADER_MODELS["FLUX.1-Kontext-dev-4bit"] = "akx/FLUX.1-Kontext-dev-mflux-4bit"
+if HAS_FLUX2 or True:  # Alias funktioniert auch über Flux1
+    DOWNLOADER_MODELS["flux2-klein-4b-4bit"] = "madroid/flux2-klein-4b-mflux-4bit"
+    DOWNLOADER_MODELS["flux2-klein-9b-4bit"] = "madroid/flux2-klein-9b-mflux-4bit"
+if HAS_ZIMAGE:
+    DOWNLOADER_MODELS["Z-Image-Turbo-4bit"] = "filipstrand/Z-Image-Turbo-mflux-4bit"
 
 
 def create_directory(directory):
@@ -74,7 +85,7 @@ def download_hg_model(model_key):
             print(f"Error downloading {model_key}: {e}")
             return None
     else:
-        print(f"Model {model_key} already exists at {model_checkpoint}. Skipping.")
+        print(f"Model {model_key} already exists. Skipping.")
     return model_checkpoint
 
 
@@ -90,7 +101,6 @@ class MfluxModelsDownloader:
                                   {"default": "flux.1-schnell-mflux-4bit"}),
             }
         }
-
     RETURN_TYPES = ("PATH",)
     RETURN_NAMES = ("Downloaded_model",)
     CATEGORY = "MFlux/Air"
@@ -117,7 +127,6 @@ class MfluxCustomModels:
                 "custom_identifier": ("STRING", {"default": ""}),
             },
         }
-
     RETURN_TYPES = ("PATH",)
     RETURN_NAMES = ("Custom_model",)
     CATEGORY = "MFlux/Air"
@@ -132,10 +141,10 @@ class MfluxCustomModels:
         model_config = ModelConfig.from_alias(alias)
         q = int(quantize)
 
-        if family == "flux2":
+        if family == "flux2" and HAS_FLUX2:
             inst = Flux2(model_config=model_config, quantize=q,
                          lora_paths=lora_paths, lora_scales=lora_scales)
-        elif family == "zimage":
+        elif family == "zimage" and HAS_ZIMAGE:
             inst = ZImage(model_config=model_config, quantize=q,
                           lora_paths=lora_paths, lora_scales=lora_scales)
         else:
@@ -163,7 +172,6 @@ class MfluxModelsLoader:
                 "free_path": ("STRING", {"default": ""}),
             },
         }
-
     RETURN_TYPES = ("PATH",)
     RETURN_NAMES = ("Local_model",)
     CATEGORY = "MFlux/Air"
@@ -187,7 +195,7 @@ class MfluxModelsLoader:
 
 
 # ---------------------------------------------------------------------------
-# Node: QuickMfluxNode  (Standard txt2img / img2img / ControlNet)
+# Node: QuickMfluxNode
 # ---------------------------------------------------------------------------
 class QuickMfluxNode:
     @classmethod
@@ -202,8 +210,7 @@ class QuickMfluxNode:
                 "width":    ("INT", {"default": 512}),
                 "height":   ("INT", {"default": 512}),
                 "steps":    ("INT", {"default": 2, "min": 1}),
-                "guidance": ("FLOAT", {"default": 3.5, "min": 0.0,
-                                       "tooltip": "Wird für FLUX.2-Klein-Modelle auf 1.0 fixiert."}),
+                "guidance": ("FLOAT", {"default": 3.5, "min": 0.0}),
                 "metadata": ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
             },
             "optional": {
@@ -217,7 +224,6 @@ class QuickMfluxNode:
                 "extra_pnginfo": "EXTRA_PNGINFO",
             },
         }
-
     RETURN_TYPES = ("IMAGE",)
     CATEGORY = "MFlux/Air"
     FUNCTION = "generate"
@@ -226,12 +232,10 @@ class QuickMfluxNode:
                  quantize="None", metadata=True, Local_model="",
                  img2img=None, Loras=None, ControlNet=None,
                  full_prompt=None, extra_pnginfo=None):
-
         generated = generate_image(
             prompt, model, seed, width, height, steps, guidance,
             quantize, metadata, Local_model, img2img, Loras, ControlNet,
         )
-
         if metadata:
             image_path     = img2img.image_path     if img2img else None
             image_strength = img2img.image_strength if img2img else None
@@ -249,343 +253,275 @@ class QuickMfluxNode:
 
 
 # ---------------------------------------------------------------------------
-# Node: MfluxFillNode  (Inpainting)
+# Nodes für neue Varianten – nur definieren wenn Abhängigkeit vorhanden
 # ---------------------------------------------------------------------------
-class MfluxFillNode:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "prompt":   ("STRING", {"multiline": True, "default": ""}),
-                "fill":     ("MfluxFillPipeline",),
-                "quantize": (ALL_QUANTIZE_OPTIONS, {"default": "4"}),
-                "seed":     ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
-                "width":    ("INT", {"default": 512}),
-                "height":   ("INT", {"default": 512}),
-                "steps":    ("INT", {"default": 30, "min": 1}),
-                "guidance": ("FLOAT", {"default": 30.0, "min": 0.0,
-                                       "tooltip": "Fill arbeitet gut mit hohen Guidance-Werten (20–50)."}),
-                "metadata": ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
-            },
-            "optional": {
-                "Local_model": ("PATH",),
-                "Loras":       ("MfluxLorasPipeline",),
-            },
-            "hidden": {
-                "full_prompt":   "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO",
-            },
-        }
 
-    RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "MFlux/Air"
-    FUNCTION = "run"
+if HAS_FILL:
+    class MfluxFillNode:
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {
+                "required": {
+                    "prompt":   ("STRING", {"multiline": True, "default": ""}),
+                    "fill":     ("MfluxFillPipeline",),
+                    "quantize": (ALL_QUANTIZE_OPTIONS, {"default": "4"}),
+                    "seed":     ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
+                    "width":    ("INT", {"default": 512}),
+                    "height":   ("INT", {"default": 512}),
+                    "steps":    ("INT", {"default": 30, "min": 1}),
+                    "guidance": ("FLOAT", {"default": 30.0, "min": 0.0}),
+                    "metadata": ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
+                },
+                "optional": {
+                    "Local_model": ("PATH",),
+                    "Loras":       ("MfluxLorasPipeline",),
+                },
+                "hidden": {"full_prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+            }
+        RETURN_TYPES = ("IMAGE",)
+        CATEGORY = "MFlux/Air"
+        FUNCTION = "run"
 
-    def run(self, prompt, fill, quantize, seed, width, height, steps, guidance,
-            metadata=True, Local_model="", Loras=None,
-            full_prompt=None, extra_pnginfo=None):
-
-        generated = generate_fill(
-            prompt, seed, width, height, steps, guidance, quantize,
-            fill.image_path, fill.mask_path, Local_model, Loras,
-        )
-
-        if metadata:
-            lora_paths, lora_scales = get_lora_info(Loras)
-            save_images_with_metadata(
-                images=generated, prompt=prompt, model="dev", quantize=quantize,
-                Local_model=Local_model, seed=seed, height=height, width=width,
-                steps=steps, guidance=guidance, image_path=fill.image_path,
-                image_strength=None, lora_paths=lora_paths, lora_scales=lora_scales,
-                filename_prefix="Mflux_Fill", full_prompt=full_prompt,
-                extra_pnginfo=extra_pnginfo,
-                extra_meta={"mask_path": fill.mask_path, "variant": "fill"},
+        def run(self, prompt, fill, quantize, seed, width, height, steps, guidance,
+                metadata=True, Local_model="", Loras=None,
+                full_prompt=None, extra_pnginfo=None):
+            generated = generate_fill(
+                prompt, seed, width, height, steps, guidance, quantize,
+                fill.image_path, fill.mask_path, Local_model, Loras,
             )
-        return generated
+            if metadata:
+                lora_paths, lora_scales = get_lora_info(Loras)
+                save_images_with_metadata(
+                    images=generated, prompt=prompt, model="dev", quantize=quantize,
+                    Local_model=Local_model, seed=seed, height=height, width=width,
+                    steps=steps, guidance=guidance, image_path=fill.image_path,
+                    image_strength=None, lora_paths=lora_paths, lora_scales=lora_scales,
+                    filename_prefix="Mflux_Fill", full_prompt=full_prompt,
+                    extra_pnginfo=extra_pnginfo,
+                    extra_meta={"mask_path": fill.mask_path, "variant": "fill"},
+                )
+            return generated
 
+if HAS_DEPTH:
+    class MfluxDepthNode:
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {
+                "required": {
+                    "prompt":    ("STRING", {"multiline": True, "default": ""}),
+                    "image_ref": ("MfluxImageRefPipeline",),
+                    "quantize":  (ALL_QUANTIZE_OPTIONS, {"default": "4"}),
+                    "seed":      ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
+                    "width":     ("INT", {"default": 512}),
+                    "height":    ("INT", {"default": 512}),
+                    "steps":     ("INT", {"default": 25, "min": 1}),
+                    "guidance":  ("FLOAT", {"default": 10.0, "min": 0.0}),
+                    "metadata":  ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
+                },
+                "optional": {
+                    "Local_model": ("PATH",),
+                    "Loras":       ("MfluxLorasPipeline",),
+                },
+                "hidden": {"full_prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+            }
+        RETURN_TYPES = ("IMAGE",)
+        CATEGORY = "MFlux/Air"
+        FUNCTION = "run"
 
-# ---------------------------------------------------------------------------
-# Node: MfluxDepthNode  (Depth Conditioning)
-# ---------------------------------------------------------------------------
-class MfluxDepthNode:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "prompt":     ("STRING", {"multiline": True, "default": ""}),
-                "image_ref":  ("MfluxImageRefPipeline",),
-                "quantize":   (ALL_QUANTIZE_OPTIONS, {"default": "4"}),
-                "seed":       ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
-                "width":      ("INT", {"default": 512}),
-                "height":     ("INT", {"default": 512}),
-                "steps":      ("INT", {"default": 25, "min": 1}),
-                "guidance":   ("FLOAT", {"default": 10.0, "min": 0.0}),
-                "metadata":   ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
-            },
-            "optional": {
-                "Local_model": ("PATH",),
-                "Loras":       ("MfluxLorasPipeline",),
-            },
-            "hidden": {
-                "full_prompt":   "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO",
-            },
-        }
-
-    RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "MFlux/Air"
-    FUNCTION = "run"
-
-    def run(self, prompt, image_ref, quantize, seed, width, height, steps, guidance,
-            metadata=True, Local_model="", Loras=None,
-            full_prompt=None, extra_pnginfo=None):
-
-        generated = generate_depth(
-            prompt, seed, width, height, steps, guidance, quantize,
-            image_ref.image_path, Local_model, Loras,
-        )
-
-        if metadata:
-            lora_paths, lora_scales = get_lora_info(Loras)
-            save_images_with_metadata(
-                images=generated, prompt=prompt, model="dev", quantize=quantize,
-                Local_model=Local_model, seed=seed, height=height, width=width,
-                steps=steps, guidance=guidance, image_path=image_ref.image_path,
-                image_strength=None, lora_paths=lora_paths, lora_scales=lora_scales,
-                filename_prefix="Mflux_Depth", full_prompt=full_prompt,
-                extra_pnginfo=extra_pnginfo, extra_meta={"variant": "depth"},
+        def run(self, prompt, image_ref, quantize, seed, width, height, steps, guidance,
+                metadata=True, Local_model="", Loras=None,
+                full_prompt=None, extra_pnginfo=None):
+            generated = generate_depth(
+                prompt, seed, width, height, steps, guidance, quantize,
+                image_ref.image_path, Local_model, Loras,
             )
-        return generated
+            if metadata:
+                lora_paths, lora_scales = get_lora_info(Loras)
+                save_images_with_metadata(
+                    images=generated, prompt=prompt, model="dev", quantize=quantize,
+                    Local_model=Local_model, seed=seed, height=height, width=width,
+                    steps=steps, guidance=guidance, image_path=image_ref.image_path,
+                    image_strength=None, lora_paths=lora_paths, lora_scales=lora_scales,
+                    filename_prefix="Mflux_Depth", full_prompt=full_prompt,
+                    extra_pnginfo=extra_pnginfo, extra_meta={"variant": "depth"},
+                )
+            return generated
 
+if HAS_REDUX:
+    class MfluxReduxNode:
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {
+                "required": {
+                    "image_ref": ("MfluxImageRefPipeline",),
+                    "quantize":  (ALL_QUANTIZE_OPTIONS, {"default": "4"}),
+                    "seed":      ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
+                    "width":     ("INT", {"default": 512}),
+                    "height":    ("INT", {"default": 512}),
+                    "steps":     ("INT", {"default": 25, "min": 1}),
+                    "guidance":  ("FLOAT", {"default": 3.5, "min": 0.0}),
+                    "metadata":  ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
+                },
+                "optional": {"Local_model": ("PATH",)},
+                "hidden": {"full_prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+            }
+        RETURN_TYPES = ("IMAGE",)
+        CATEGORY = "MFlux/Air"
+        FUNCTION = "run"
 
-# ---------------------------------------------------------------------------
-# Node: MfluxReduxNode  (Image Variation ohne Prompt)
-# ---------------------------------------------------------------------------
-class MfluxReduxNode:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "image_ref":  ("MfluxImageRefPipeline",),
-                "quantize":   (ALL_QUANTIZE_OPTIONS, {"default": "4"}),
-                "seed":       ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
-                "width":      ("INT", {"default": 512}),
-                "height":     ("INT", {"default": 512}),
-                "steps":      ("INT", {"default": 25, "min": 1}),
-                "guidance":   ("FLOAT", {"default": 3.5, "min": 0.0}),
-                "metadata":   ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
-            },
-            "optional": {
-                "Local_model": ("PATH",),
-            },
-            "hidden": {
-                "full_prompt":   "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO",
-            },
-        }
-
-    RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "MFlux/Air"
-    FUNCTION = "run"
-
-    def run(self, image_ref, quantize, seed, width, height, steps, guidance,
-            metadata=True, Local_model="", full_prompt=None, extra_pnginfo=None):
-
-        generated = generate_redux(
-            seed, width, height, steps, guidance, quantize,
-            image_ref.image_path, Local_model,
-        )
-
-        if metadata:
-            save_images_with_metadata(
-                images=generated, prompt="[redux – no prompt]", model="dev",
-                quantize=quantize, Local_model=Local_model, seed=seed,
-                height=height, width=width, steps=steps, guidance=guidance,
-                image_path=image_ref.image_path, image_strength=None,
-                lora_paths=[], lora_scales=[],
-                filename_prefix="Mflux_Redux", full_prompt=full_prompt,
-                extra_pnginfo=extra_pnginfo, extra_meta={"variant": "redux"},
+        def run(self, image_ref, quantize, seed, width, height, steps, guidance,
+                metadata=True, Local_model="", full_prompt=None, extra_pnginfo=None):
+            generated = generate_redux(
+                seed, width, height, steps, guidance, quantize,
+                image_ref.image_path, Local_model,
             )
-        return generated
+            if metadata:
+                save_images_with_metadata(
+                    images=generated, prompt="[redux]", model="dev", quantize=quantize,
+                    Local_model=Local_model, seed=seed, height=height, width=width,
+                    steps=steps, guidance=guidance, image_path=image_ref.image_path,
+                    image_strength=None, lora_paths=[], lora_scales=[],
+                    filename_prefix="Mflux_Redux", full_prompt=full_prompt,
+                    extra_pnginfo=extra_pnginfo, extra_meta={"variant": "redux"},
+                )
+            return generated
 
+if HAS_KONTEXT:
+    class MfluxKontextNode:
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {
+                "required": {
+                    "prompt":    ("STRING", {"multiline": True,
+                                             "default": "Make the background a sunset beach"}),
+                    "image_ref": ("MfluxImageRefPipeline",),
+                    "quantize":  (ALL_QUANTIZE_OPTIONS, {"default": "4"}),
+                    "seed":      ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
+                    "width":     ("INT", {"default": 512}),
+                    "height":    ("INT", {"default": 512}),
+                    "steps":     ("INT", {"default": 25, "min": 1}),
+                    "guidance":  ("FLOAT", {"default": 2.5, "min": 0.0}),
+                    "metadata":  ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
+                },
+                "optional": {
+                    "Local_model": ("PATH",),
+                    "Loras":       ("MfluxLorasPipeline",),
+                },
+                "hidden": {"full_prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+            }
+        RETURN_TYPES = ("IMAGE",)
+        CATEGORY = "MFlux/Air"
+        FUNCTION = "run"
 
-# ---------------------------------------------------------------------------
-# Node: MfluxKontextNode  (Image-guided Text-Editing)
-# ---------------------------------------------------------------------------
-class MfluxKontextNode:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "prompt":    ("STRING", {
-                    "multiline": True,
-                    "default": "Make the background a sunset beach",
-                    "tooltip": "Beschreibe die gewünschte Änderung am Referenzbild.",
-                }),
-                "image_ref": ("MfluxImageRefPipeline",),
-                "quantize":  (ALL_QUANTIZE_OPTIONS, {"default": "4"}),
-                "seed":      ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
-                "width":     ("INT", {"default": 512}),
-                "height":    ("INT", {"default": 512}),
-                "steps":     ("INT", {"default": 25, "min": 1}),
-                "guidance":  ("FLOAT", {"default": 2.5, "min": 0.0,
-                                        "tooltip": "Kontext empfiehlt 2.0–4.0."}),
-                "metadata":  ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
-            },
-            "optional": {
-                "Local_model": ("PATH",),
-                "Loras":       ("MfluxLorasPipeline",),
-            },
-            "hidden": {
-                "full_prompt":   "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO",
-            },
-        }
-
-    RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "MFlux/Air"
-    FUNCTION = "run"
-
-    def run(self, prompt, image_ref, quantize, seed, width, height, steps, guidance,
-            metadata=True, Local_model="", Loras=None,
-            full_prompt=None, extra_pnginfo=None):
-
-        generated = generate_kontext(
-            prompt, seed, width, height, steps, guidance, quantize,
-            image_ref.image_path, Local_model, Loras,
-        )
-
-        if metadata:
-            lora_paths, lora_scales = get_lora_info(Loras)
-            save_images_with_metadata(
-                images=generated, prompt=prompt, model="kontext-dev", quantize=quantize,
-                Local_model=Local_model, seed=seed, height=height, width=width,
-                steps=steps, guidance=guidance, image_path=image_ref.image_path,
-                image_strength=None, lora_paths=lora_paths, lora_scales=lora_scales,
-                filename_prefix="Mflux_Kontext", full_prompt=full_prompt,
-                extra_pnginfo=extra_pnginfo, extra_meta={"variant": "kontext"},
+        def run(self, prompt, image_ref, quantize, seed, width, height, steps, guidance,
+                metadata=True, Local_model="", Loras=None,
+                full_prompt=None, extra_pnginfo=None):
+            generated = generate_kontext(
+                prompt, seed, width, height, steps, guidance, quantize,
+                image_ref.image_path, Local_model, Loras,
             )
-        return generated
+            if metadata:
+                lora_paths, lora_scales = get_lora_info(Loras)
+                save_images_with_metadata(
+                    images=generated, prompt=prompt, model="kontext-dev", quantize=quantize,
+                    Local_model=Local_model, seed=seed, height=height, width=width,
+                    steps=steps, guidance=guidance, image_path=image_ref.image_path,
+                    image_strength=None, lora_paths=lora_paths, lora_scales=lora_scales,
+                    filename_prefix="Mflux_Kontext", full_prompt=full_prompt,
+                    extra_pnginfo=extra_pnginfo, extra_meta={"variant": "kontext"},
+                )
+            return generated
 
+if HAS_QWEN:
+    class MfluxQwenNode:
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {
+                "required": {
+                    "prompt":          ("STRING", {"multiline": True,
+                                                   "default": "A majestic tiger, photorealistic"}),
+                    "negative_prompt": ("STRING", {"multiline": True,
+                                                   "default": "blurry, low quality"}),
+                    "quantize": (ALL_QUANTIZE_OPTIONS, {"default": "8"}),
+                    "seed":     ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
+                    "width":    ("INT", {"default": 1024}),
+                    "height":   ("INT", {"default": 1024}),
+                    "steps":    ("INT", {"default": 30, "min": 1}),
+                    "guidance": ("FLOAT", {"default": 5.0, "min": 0.0}),
+                    "metadata": ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
+                },
+                "optional": {
+                    "Local_model": ("PATH",),
+                    "Loras":       ("MfluxLorasPipeline",),
+                },
+                "hidden": {"full_prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+            }
+        RETURN_TYPES = ("IMAGE",)
+        CATEGORY = "MFlux/Air"
+        FUNCTION = "run"
 
-# ---------------------------------------------------------------------------
-# Node: MfluxQwenNode  (Qwen Image txt2img)
-# ---------------------------------------------------------------------------
-class MfluxQwenNode:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "prompt":          ("STRING", {
-                    "multiline": True,
-                    "default": "A majestic tiger in its natural habitat, photorealistic",
-                    "tooltip": "Unterstützt mehrsprachige Prompts inkl. Chinesisch.",
-                }),
-                "negative_prompt": ("STRING", {
-                    "multiline": True,
-                    "default": "blurry, low quality, distorted, deformed",
-                }),
-                "quantize": (ALL_QUANTIZE_OPTIONS, {"default": "8",
-                              "tooltip": "8-bit wird für beste Qualität empfohlen."}),
-                "seed":     ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
-                "width":    ("INT", {"default": 1024}),
-                "height":   ("INT", {"default": 1024}),
-                "steps":    ("INT", {"default": 30, "min": 1}),
-                "guidance": ("FLOAT", {"default": 5.0, "min": 0.0}),
-                "metadata": ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
-            },
-            "optional": {
-                "Local_model": ("PATH",),
-                "Loras":       ("MfluxLorasPipeline",),
-            },
-            "hidden": {
-                "full_prompt":   "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO",
-            },
-        }
-
-    RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "MFlux/Air"
-    FUNCTION = "run"
-
-    def run(self, prompt, negative_prompt, quantize, seed, width, height, steps,
-            guidance, metadata=True, Local_model="", Loras=None,
-            full_prompt=None, extra_pnginfo=None):
-
-        generated = generate_qwen(
-            prompt, negative_prompt, seed, width, height, steps, guidance,
-            quantize, Local_model, Loras,
-        )
-
-        if metadata:
-            lora_paths, lora_scales = get_lora_info(Loras)
-            save_images_with_metadata(
-                images=generated, prompt=prompt, model="qwen-image", quantize=quantize,
-                Local_model=Local_model, seed=seed, height=height, width=width,
-                steps=steps, guidance=guidance, image_path=None, image_strength=None,
-                lora_paths=lora_paths, lora_scales=lora_scales,
-                filename_prefix="Mflux_Qwen", full_prompt=full_prompt,
-                extra_pnginfo=extra_pnginfo,
-                extra_meta={"negative_prompt": negative_prompt, "variant": "qwen"},
+        def run(self, prompt, negative_prompt, quantize, seed, width, height, steps,
+                guidance, metadata=True, Local_model="", Loras=None,
+                full_prompt=None, extra_pnginfo=None):
+            generated = generate_qwen(
+                prompt, negative_prompt, seed, width, height, steps, guidance,
+                quantize, Local_model, Loras,
             )
-        return generated
+            if metadata:
+                lora_paths, lora_scales = get_lora_info(Loras)
+                save_images_with_metadata(
+                    images=generated, prompt=prompt, model="qwen-image", quantize=quantize,
+                    Local_model=Local_model, seed=seed, height=height, width=width,
+                    steps=steps, guidance=guidance, image_path=None, image_strength=None,
+                    lora_paths=lora_paths, lora_scales=lora_scales,
+                    filename_prefix="Mflux_Qwen", full_prompt=full_prompt,
+                    extra_pnginfo=extra_pnginfo,
+                    extra_meta={"negative_prompt": negative_prompt, "variant": "qwen"},
+                )
+            return generated
 
+    class MfluxQwenEditNode:
+        @classmethod
+        def INPUT_TYPES(cls):
+            return {
+                "required": {
+                    "prompt":    ("STRING", {"multiline": True,
+                                             "default": "Change the background to a snowy mountain"}),
+                    "image_ref": ("MfluxImageRefPipeline",),
+                    "quantize":  (ALL_QUANTIZE_OPTIONS, {"default": "8"}),
+                    "seed":      ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
+                    "width":     ("INT", {"default": 1024}),
+                    "height":    ("INT", {"default": 1024}),
+                    "steps":     ("INT", {"default": 30, "min": 1}),
+                    "guidance":  ("FLOAT", {"default": 5.0, "min": 0.0}),
+                    "metadata":  ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
+                },
+                "optional": {
+                    "Local_model": ("PATH",),
+                    "Loras":       ("MfluxLorasPipeline",),
+                },
+                "hidden": {"full_prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
+            }
+        RETURN_TYPES = ("IMAGE",)
+        CATEGORY = "MFlux/Air"
+        FUNCTION = "run"
 
-# ---------------------------------------------------------------------------
-# Node: MfluxQwenEditNode  (Qwen Image Edit)
-# ---------------------------------------------------------------------------
-class MfluxQwenEditNode:
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "prompt":    ("STRING", {
-                    "multiline": True,
-                    "default": "Change the background to a snowy mountain landscape",
-                    "tooltip": "Beschreibe die gewünschte Änderung in natürlicher Sprache.",
-                }),
-                "image_ref": ("MfluxImageRefPipeline",
-                              {"tooltip": "1–4 Referenzbilder über MfluxImageRefLoader."}),
-                "quantize":  (ALL_QUANTIZE_OPTIONS, {"default": "8"}),
-                "seed":      ("INT", {"default": -1, "min": -1, "max": 0xFFFFFFFFFFFFFFFF}),
-                "width":     ("INT", {"default": 1024}),
-                "height":    ("INT", {"default": 1024}),
-                "steps":     ("INT", {"default": 30, "min": 1}),
-                "guidance":  ("FLOAT", {"default": 5.0, "min": 0.0}),
-                "metadata":  ("BOOLEAN", {"default": True, "label_on": "True", "label_off": "False"}),
-            },
-            "optional": {
-                "Local_model": ("PATH",),
-                "Loras":       ("MfluxLorasPipeline",),
-            },
-            "hidden": {
-                "full_prompt":   "PROMPT",
-                "extra_pnginfo": "EXTRA_PNGINFO",
-            },
-        }
-
-    RETURN_TYPES = ("IMAGE",)
-    CATEGORY = "MFlux/Air"
-    FUNCTION = "run"
-
-    def run(self, prompt, image_ref, quantize, seed, width, height, steps, guidance,
-            metadata=True, Local_model="", Loras=None,
-            full_prompt=None, extra_pnginfo=None):
-
-        generated = generate_qwen_edit(
-            prompt, seed, width, height, steps, guidance, quantize,
-            image_ref.image_paths, Local_model, Loras,
-        )
-
-        if metadata:
-            lora_paths, lora_scales = get_lora_info(Loras)
-            save_images_with_metadata(
-                images=generated, prompt=prompt, model="qwen-image", quantize=quantize,
-                Local_model=Local_model, seed=seed, height=height, width=width,
-                steps=steps, guidance=guidance, image_path=image_ref.image_path,
-                image_strength=None, lora_paths=lora_paths, lora_scales=lora_scales,
-                filename_prefix="Mflux_QwenEdit", full_prompt=full_prompt,
-                extra_pnginfo=extra_pnginfo,
-                extra_meta={"image_paths": image_ref.image_paths, "variant": "qwen-edit"},
+        def run(self, prompt, image_ref, quantize, seed, width, height, steps, guidance,
+                metadata=True, Local_model="", Loras=None,
+                full_prompt=None, extra_pnginfo=None):
+            generated = generate_qwen_edit(
+                prompt, seed, width, height, steps, guidance, quantize,
+                image_ref.image_paths, Local_model, Loras,
             )
-        return generated
+            if metadata:
+                lora_paths, lora_scales = get_lora_info(Loras)
+                save_images_with_metadata(
+                    images=generated, prompt=prompt, model="qwen-image", quantize=quantize,
+                    Local_model=Local_model, seed=seed, height=height, width=width,
+                    steps=steps, guidance=guidance, image_path=image_ref.image_path,
+                    image_strength=None, lora_paths=lora_paths, lora_scales=lora_scales,
+                    filename_prefix="Mflux_QwenEdit", full_prompt=full_prompt,
+                    extra_pnginfo=extra_pnginfo,
+                    extra_meta={"image_paths": image_ref.image_paths, "variant": "qwen-edit"},
+                )
+            return generated
