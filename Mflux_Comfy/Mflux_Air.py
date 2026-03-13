@@ -396,6 +396,19 @@ class QuickMfluxNode:
                         "(z-image-base, qwen-image). Ignored for FLUX.1, FLUX.2 and Z-Image-Turbo."
                     ),
                 }),
+                "low_ram": ("BOOLEAN", {
+                    "default": False,
+                    "label_on": "True", "label_off": "False",
+                    "tooltip": "Reduce memory usage by offloading model weights (slower generation).",
+                }),
+                "mlx_cache_limit_gb": ("FLOAT", {
+                    "default": 0.0, "min": 0.0, "max": 64.0, "step": 0.5,
+                    "tooltip": "Cap MLX cache in GB (e.g. 2.5). Set to 0.0 to disable.",
+                }),
+                "stepwise_output_dir": ("STRING", {
+                    "default": "",
+                    "tooltip": "Save intermediate denoising steps as images to this folder. Leave empty to disable.",
+                }),
                 "Local_model": ("PATH",),
                 "Loras":       ("MfluxLorasPipeline",),
                 "img2img":     ("MfluxImg2ImgPipeline",),
@@ -409,20 +422,24 @@ class QuickMfluxNode:
     RETURN_TYPES = ("IMAGE",)
     CATEGORY = "MFlux/Air"
     FUNCTION = "generate"
- 
+
     def generate(self, prompt, model, seed, width, height, steps, guidance,
                  quantize="None", metadata=True, negative_prompt="",
+                 low_ram=False, mlx_cache_limit_gb=0.0, stepwise_output_dir="",
                  Local_model="", img2img=None, Loras=None, ControlNet=None,
                  full_prompt=None, extra_pnginfo=None):
         # Negative prompt nur weitergeben wenn das Modell CFG unterstützt
         family, alias = resolve_model_alias(model, Local_model)
         supports_neg = (family == "qwen") or (family == "zimage" and alias == "z-image-base")
         neg = negative_prompt.strip() if supports_neg and negative_prompt else ""
- 
+
         generated = generate_image(
             prompt, model, seed, width, height, steps, guidance,
             quantize, metadata, Local_model, img2img, Loras, ControlNet,
             negative_prompt=neg,
+            low_ram=low_ram,
+            mlx_cache_limit_gb=mlx_cache_limit_gb,
+            stepwise_output_dir=stepwise_output_dir,
         )
         if metadata:
             image_path     = img2img.image_path     if img2img else None
@@ -439,7 +456,7 @@ class QuickMfluxNode:
                 extra_meta=extra,
             )
         return generated
- 
+
 if HAS_FILL:
     class MfluxFillNode:
         @classmethod
@@ -465,7 +482,7 @@ if HAS_FILL:
         RETURN_TYPES = ("IMAGE",)
         CATEGORY = "MFlux/Air"
         FUNCTION = "run"
- 
+
         def run(self, prompt, fill, quantize, seed, width, height, steps, guidance,
                 metadata=True, Local_model="", Loras=None,
                 full_prompt=None, extra_pnginfo=None):
@@ -485,7 +502,7 @@ if HAS_FILL:
                     extra_meta={"mask_path": fill.mask_path, "variant": "fill"},
                 )
             return generated
- 
+
 if HAS_DEPTH:
     class MfluxDepthNode:
         @classmethod
@@ -511,7 +528,7 @@ if HAS_DEPTH:
         RETURN_TYPES = ("IMAGE",)
         CATEGORY = "MFlux/Air"
         FUNCTION = "run"
- 
+
         def run(self, prompt, image_ref, quantize, seed, width, height, steps, guidance,
                 metadata=True, Local_model="", Loras=None,
                 full_prompt=None, extra_pnginfo=None):
@@ -530,7 +547,7 @@ if HAS_DEPTH:
                     extra_pnginfo=extra_pnginfo, extra_meta={"variant": "depth"},
                 )
             return generated
- 
+
 if HAS_REDUX:
     class MfluxReduxNode:
         @classmethod
@@ -552,7 +569,7 @@ if HAS_REDUX:
         RETURN_TYPES = ("IMAGE",)
         CATEGORY = "MFlux/Air"
         FUNCTION = "run"
- 
+
         def run(self, image_ref, quantize, seed, width, height, steps, guidance,
                 metadata=True, Local_model="", full_prompt=None, extra_pnginfo=None):
             generated = generate_redux(
@@ -569,7 +586,7 @@ if HAS_REDUX:
                     extra_pnginfo=extra_pnginfo, extra_meta={"variant": "redux"},
                 )
             return generated
- 
+
 if HAS_KONTEXT:
     class MfluxKontextNode:
         @classmethod
@@ -596,7 +613,7 @@ if HAS_KONTEXT:
         RETURN_TYPES = ("IMAGE",)
         CATEGORY = "MFlux/Air"
         FUNCTION = "run"
- 
+
         def run(self, prompt, image_ref, quantize, seed, width, height, steps, guidance,
                 metadata=True, Local_model="", Loras=None,
                 full_prompt=None, extra_pnginfo=None):
@@ -615,7 +632,7 @@ if HAS_KONTEXT:
                     extra_pnginfo=extra_pnginfo, extra_meta={"variant": "kontext"},
                 )
             return generated
- 
+
 if HAS_QWEN:
     class MfluxQwenNode:
         @classmethod
@@ -643,7 +660,7 @@ if HAS_QWEN:
         RETURN_TYPES = ("IMAGE",)
         CATEGORY = "MFlux/Air"
         FUNCTION = "run"
- 
+
         def run(self, prompt, negative_prompt, quantize, seed, width, height, steps,
                 guidance, metadata=True, Local_model="", Loras=None,
                 full_prompt=None, extra_pnginfo=None):
@@ -663,7 +680,7 @@ if HAS_QWEN:
                     extra_meta={"negative_prompt": negative_prompt, "variant": "qwen"},
                 )
             return generated
- 
+
     class MfluxQwenEditNode:
         @classmethod
         def INPUT_TYPES(cls):
@@ -689,7 +706,7 @@ if HAS_QWEN:
         RETURN_TYPES = ("IMAGE",)
         CATEGORY = "MFlux/Air"
         FUNCTION = "run"
- 
+
         def run(self, prompt, image_ref, quantize, seed, width, height, steps, guidance,
                 metadata=True, Local_model="", Loras=None,
                 full_prompt=None, extra_pnginfo=None):

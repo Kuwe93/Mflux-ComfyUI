@@ -323,7 +323,9 @@ def load_or_create_model(model, quantize, local_path, lora_paths, lora_scales,
 def generate_image(prompt, model, seed, width, height, steps, guidance,
                    quantize="None", metadata=True, Local_model="",
                    image=None, Loras=None, ControlNet=None,
-                   negative_prompt=""):
+                   negative_prompt="",
+                   low_ram=False, mlx_cache_limit_gb=0.0,
+                   stepwise_output_dir=""):
     seed = random.randint(0, 0xFFFFFFFFFFFFFFFF) if seed == -1 else int(seed)
     print(f"[Mflux] seed={seed}")
     lora_paths, lora_scales = get_lora_info(Loras)
@@ -421,6 +423,50 @@ def generate_image(prompt, model, seed, width, height, steps, guidance,
         else:
             gen_kwargs["init_image_path"]     = image_path
             gen_kwargs["init_image_strength"] = image_strength
+
+    # ---------------------------------------------------------------------------
+    # Callbacks: low_ram, mlx_cache_limit, stepwise output
+    # ---------------------------------------------------------------------------
+    callbacks = []
+
+    if low_ram or (mlx_cache_limit_gb and mlx_cache_limit_gb > 0):
+        try:
+            from mflux.callbacks.instances.memory_saver import MemorySaver
+            cache_bytes = int(mlx_cache_limit_gb * 1_000_000_000) if mlx_cache_limit_gb > 0 else 1_000_000_000
+            mem_saver = MemorySaver(
+                model=inst,
+                keep_transformer=not low_ram,
+                cache_limit_bytes=cache_bytes,
+            )
+            callbacks.append(mem_saver)
+            print(f"[Mflux] MemorySaver: low_ram={low_ram}, cache_limit={mlx_cache_limit_gb}GB")
+        except ImportError:
+            print("[Mflux] MemorySaver not available in this mflux version.")
+
+    if stepwise_output_dir and stepwise_output_dir.strip():
+        try:
+            from mflux.callbacks.instances.stepwise_handler import StepwiseHandler
+            import os
+            out_dir = stepwise_output_dir.strip()
+            os.makedirs(out_dir, exist_ok=True)
+            stepwise = StepwiseHandler(
+                model=inst,
+                output_dir=out_dir,
+                latent_creator=inst.latent_creator,
+            )
+            callbacks.append(stepwise)
+            print(f"[Mflux] StepwiseHandler: output_dir={out_dir}")
+        except ImportError:
+            print("[Mflux] StepwiseHandler not available in this mflux version.")
+        except AttributeError:
+            print("[Mflux] StepwiseHandler: latent_creator not found on this model.")
+
+    if callbacks:
+        try:
+            from mflux.callbacks.callback_registry import CallbackRegistry
+            CallbackRegistry.start(callbacks=callbacks)
+        except Exception as e:
+            print(f"[Mflux] CallbackRegistry error: {e}")
 
     generated = inst.generate_image(**gen_kwargs)
     return (_tensor_from_image(generated),)
