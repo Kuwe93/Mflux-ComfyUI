@@ -1,0 +1,155 @@
+{
+  "last_node_id": 3,
+  "last_link_id": 1,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "Note",
+      "pos": [
+        20,
+        20
+      ],
+      "size": [
+        500,
+        140
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "widgets_values": [
+        "Z-Image Turbo LoRA Training (txt2img)\n\n1. Setze data_path auf deinen Trainingsordner\n   Layout: 01.txt + 01.png, 02.txt + 02.png, ...\n   Optional: preview_1.txt für Vorschau-Bilder\n\n2. Passe output_path und config_save_path an\n\n3. Starte mit Queue Prompt"
+      ],
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "title": "Anleitung",
+      "color": "#223322",
+      "bgcolor": "#223322"
+    },
+    {
+      "id": 2,
+      "type": "MfluxTrainConfigBuilder",
+      "pos": [
+        20,
+        180
+      ],
+      "size": [
+        500,
+        580
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "title": "Train Config – Z-Image Turbo",
+      "widgets_values": [
+        "z-image-turbo",
+        "/path/to/training/images",
+        "~/training_output/zimage_turbo",
+        "~/train_zimage_turbo.json",
+        "8",
+        9,
+        0.0,
+        4,
+        512,
+        false,
+        1,
+        1,
+        4,
+        9,
+        "AdamW",
+        0.0001,
+        30,
+        1,
+        30,
+        8,
+        15,
+        30,
+        "",
+        "",
+        ""
+      ],
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "train_config",
+          "type": "MFLUX_TRAIN_CONFIG",
+          "links": [
+            1
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MfluxTrainConfigBuilder"
+      }
+    },
+    {
+      "id": 3,
+      "type": "MfluxTrainer",
+      "pos": [
+        560,
+        180
+      ],
+      "size": [
+        320,
+        120
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "title": "MFlux Trainer",
+      "widgets_values": [
+        "start"
+      ],
+      "inputs": [
+        {
+          "name": "train_config",
+          "type": "MFLUX_TRAIN_CONFIG",
+          "link": 1,
+          "slot_index": 0
+        },
+        {
+          "name": "config_json_path",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "config_json_path"
+          }
+        },
+        {
+          "name": "checkpoint_path",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "checkpoint_path"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output_log",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MfluxTrainer"
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      3,
+      0,
+      "MFLUX_TRAIN_CONFIG"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

@@ -1,0 +1,179 @@
+{
+  "last_node_id": 4,
+  "last_link_id": 1,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "Note",
+      "pos": [
+        20,
+        20
+      ],
+      "size": [
+        500,
+        160
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "widgets_values": [
+        "FLUX.2 Klein Base – Edit LoRA Training\n\nEdit-Modus wird automatisch erkannt anhand des Datei-Layouts:\n  01_in.txt + 01_in.png + 01_out.png\n  02_in.txt + 02_in.png + 02_out.png\n  optional: preview_1.txt + preview_1.png\n\nNur für flux2-klein-base-4b und flux2-klein-base-9b unterstützt.\nSetze data_path, output_path und config_save_path, dann Queue Prompt."
+      ],
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "title": "Anleitung – Edit Training",
+      "color": "#222233",
+      "bgcolor": "#222233"
+    },
+    {
+      "id": 2,
+      "type": "MfluxTrainConfigBuilder",
+      "pos": [
+        20,
+        200
+      ],
+      "size": [
+        500,
+        580
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "title": "Train Config – FLUX.2 Klein Edit",
+      "widgets_values": [
+        "flux2-klein-base-9b",
+        "/path/to/edit/training/images",
+        "~/training_output/flux2_edit",
+        "~/train_flux2_edit.json",
+        "None",
+        40,
+        1.0,
+        42,
+        1024,
+        false,
+        100,
+        1,
+        25,
+        40,
+        "AdamW",
+        0.0001,
+        25,
+        1,
+        20,
+        16,
+        0,
+        5,
+        "",
+        "",
+        ""
+      ],
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "train_config",
+          "type": "MFLUX_TRAIN_CONFIG",
+          "links": [
+            1
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MfluxTrainConfigBuilder"
+      }
+    },
+    {
+      "id": 3,
+      "type": "MfluxTrainer",
+      "pos": [
+        560,
+        200
+      ],
+      "size": [
+        320,
+        120
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "title": "MFlux Trainer",
+      "widgets_values": [
+        "start"
+      ],
+      "inputs": [
+        {
+          "name": "train_config",
+          "type": "MFLUX_TRAIN_CONFIG",
+          "link": 1,
+          "slot_index": 0
+        },
+        {
+          "name": "config_json_path",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "config_json_path"
+          }
+        },
+        {
+          "name": "checkpoint_path",
+          "type": "STRING",
+          "link": null,
+          "widget": {
+            "name": "checkpoint_path"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output_log",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "MfluxTrainer"
+      }
+    },
+    {
+      "id": 4,
+      "type": "Note",
+      "pos": [
+        560,
+        340
+      ],
+      "size": [
+        320,
+        180
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "widgets_values": [
+        "Training fortsetzen:\n\n1. Mode auf 'resume' setzen\n2. checkpoint_path auf eine\n   .zip Datei aus dem\n   checkpoints/ Ordner setzen\n3. train_config Verbindung\n   kann getrennt bleiben"
+      ],
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "title": "Resume Tipp",
+      "color": "#333322",
+      "bgcolor": "#333322"
+    }
+  ],
+  "links": [
+    [
+      1,
+      2,
+      0,
+      3,
+      0,
+      "MFLUX_TRAIN_CONFIG"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
