@@ -83,7 +83,7 @@
       },
       "widgets_values": [
         "InstantX/FLUX.1-dev-Controlnet-Canny",
-        "placeholder.png",
+        "example.png",
         0.5,
         false
       ]
@@ -174,7 +174,8 @@
         1024,
         25,
         3.5,
-        true
+        true,
+        ""
       ]
     },
     {

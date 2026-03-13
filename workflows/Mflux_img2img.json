@@ -80,7 +80,7 @@
         "Node name for S&R": "MfluxImg2Img"
       },
       "widgets_values": [
-        "placeholder.png",
+        "example.png",
         0.4
       ]
     },
@@ -142,7 +142,8 @@
         1024,
         25,
         3.5,
-        true
+        true,
+        ""
       ]
     },
     {

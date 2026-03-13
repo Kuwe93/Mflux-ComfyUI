@@ -61,9 +61,10 @@
         1024,
         20,
         4.0,
-        true
+        true,
+        ""
       ],
-      "title": "Pass 1 \u2013 Z-Image Base (Structure)"
+      "title": "Pass 1 – Z-Image Base (Structure)"
     },
     {
       "id": 2,
@@ -140,7 +141,7 @@
         "Node name for S&R": "MfluxImg2Img"
       },
       "widgets_values": [
-        "placeholder.png",
+        "example.png",
         0.4
       ]
     },
@@ -202,9 +203,10 @@
         1024,
         9,
         4.0,
-        true
+        true,
+        ""
       ],
-      "title": "Pass 2 \u2013 Z-Image Turbo (Details)"
+      "title": "Pass 2 – Z-Image Turbo (Details)"
     },
     {
       "id": 5,

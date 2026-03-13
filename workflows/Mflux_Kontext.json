@@ -54,7 +54,7 @@
         "Node name for S&R": "MfluxImageRefLoader"
       },
       "widgets_values": [
-        "placeholder.png",
+        "example.png",
         "None",
         "None",
         "None"
